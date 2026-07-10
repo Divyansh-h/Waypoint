@@ -1,7 +1,8 @@
 import os
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Optional, Union, Set
+from typing import Optional, Set, Union
+
 
 class RepoCrawler:
     """
@@ -28,13 +29,19 @@ class RepoCrawler:
         self.repo_path = Path(repo_path).resolve()
         
         # Ensure extensions start with a dot
-        self.include_extensions = {ext if ext.startswith(".") else f".{ext}" for ext in include_extensions}
+        self.include_extensions = {
+            ext if ext.startswith(".") else f".{ext}" for ext in include_extensions
+        }
         
         self.exclude_extensions = set()
         if exclude_extensions:
-            self.exclude_extensions = {ext if ext.startswith(".") else f".{ext}" for ext in exclude_extensions}
+            self.exclude_extensions = {
+                ext if ext.startswith(".") else f".{ext}" for ext in exclude_extensions
+            }
             
-        self.exclude_directories = exclude_directories or {".git", "__pycache__", "node_modules", "venv", ".venv"}
+        self.exclude_directories = exclude_directories or {
+            ".git", "__pycache__", "node_modules", "venv", ".venv"
+        }
 
     def walk(self) -> Iterator[Path]:
         """
@@ -44,7 +51,7 @@ class RepoCrawler:
             Path: The absolute path to a file that matches the inclusion criteria.
         """
         if not self.repo_path.exists() or not self.repo_path.is_dir():
-            raise NotADirectoryError(f"Repository path does not exist or is not a directory: {self.repo_path}")
+            raise NotADirectoryError(f"Path does not exist or is not a directory: {self.repo_path}")
 
         for root, dirs, files in os.walk(self.repo_path):
             # Modify dirs in-place to prevent os.walk from traversing excluded directories

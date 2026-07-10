@@ -1,11 +1,11 @@
 import hashlib
 import json
 import logging
-from typing import List
+from typing import Any, List
 
 import psycopg2
+from pgvector.psycopg2 import register_vector  # type: ignore
 from psycopg2.extras import execute_batch
-from pgvector.psycopg2 import register_vector
 
 from ingestion.models import EmbeddedChunk
 
@@ -38,7 +38,7 @@ class PgVectorIndexer:
         unique_string = f"{chunk.file_path}:{chunk.line_start}"
         return hashlib.sha256(unique_string.encode('utf-8')).hexdigest()
 
-    def _setup_database(self, conn) -> None:
+    def _setup_database(self, conn: Any) -> None:
         """Creates the vector extension and the chunks table if they do not exist."""
         with conn.cursor() as cur:
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
@@ -91,7 +91,7 @@ class PgVectorIndexer:
                 id, file_path, chunk_type, function_name, section_path, 
                 line_start, line_end, content, metadata, embedding
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
             ON CONFLICT (id) DO UPDATE SET
                 file_path = EXCLUDED.file_path,
                 chunk_type = EXCLUDED.chunk_type,

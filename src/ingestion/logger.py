@@ -23,7 +23,8 @@ class JSONFormatter(logging.Formatter):
         if record.exc_info:
             log_obj["exception"] = self.formatException(record.exc_info)
 
-        # Include any extra kwargs passed to the logger (e.g., logger.info("msg", extra={"file_count": 5}))
+        # Include any extra kwargs passed to the logger
+        # (e.g., logger.info("msg", extra={"file_count": 5}))
         for key, value in record.__dict__.items():
             if key not in [
                 "args", "asctime", "created", "exc_info", "exc_text", "filename",

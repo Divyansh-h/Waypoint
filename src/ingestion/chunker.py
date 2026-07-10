@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import tree_sitter_python as tspython
-from tree_sitter import Language, Parser, Node
+from tree_sitter import Language, Node, Parser
 
 from ingestion.models import Chunk
 
@@ -29,8 +29,6 @@ class ASTChunker:
         try:
             with open(file_path, "rb") as f:
                 source_bytes = f.read()
-            # We still need a string version for the God Node line-splitting logic
-            source_code_str = source_bytes.decode("utf-8")
         except Exception as e:
             logger.warning(f"Skipping unreadable file {file_path}: {e}")
             return []
@@ -86,7 +84,10 @@ class ASTChunker:
                 # In Tree-sitter, a decorated function is a child of a `decorated_definition` node.
                 # If we just extract `function_definition`, we lose the `@decorator` lines above it.
                 # We check if the parent is a `decorated_definition` and use its boundaries instead.
-                target_node = node.parent if node.parent and node.parent.type == "decorated_definition" else node
+                target_node = (
+                    node.parent if node.parent and node.parent.type == "decorated_definition" 
+                    else node
+                )
                 
                 base_chunk = Chunk(
                     content=extract_code(target_node),
@@ -112,7 +113,10 @@ class ASTChunker:
                 new_context = f"{context_prefix}.{cls_name}" if context_prefix else cls_name
                 
                 # Same decorator check for classes
-                target_node = node.parent if node.parent and node.parent.type == "decorated_definition" else node
+                target_node = (
+                    node.parent if node.parent and node.parent.type == "decorated_definition" 
+                    else node
+                )
                 
                 base_chunk = Chunk(
                     content=extract_code(target_node),

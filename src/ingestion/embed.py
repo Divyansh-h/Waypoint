@@ -1,21 +1,24 @@
+import logging
 import os
 import time
-import requests
-import logging
+import concurrent.futures
 from typing import List
+
+import requests
 
 from .models import Chunk, EmbeddedChunk
 
 logger = logging.getLogger("ingestion_pipeline")
 
 JINA_API_URL = "https://api.jina.ai/v1/embeddings"
-JINA_API_KEY = os.environ.get("JINA_API_KEY", "")
+
 
 def get_jina_embeddings(texts: List[str], retries: int = 3) -> List[List[float]]:
     """Calls the Jina API to get embeddings with exponential backoff retry logic."""
+    api_key = os.environ.get("JINA_API_KEY", "")
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {JINA_API_KEY}"
+        "Authorization": f"Bearer {api_key}"
     }
     data = {
         "model": "jina-embeddings-v3",
@@ -44,35 +47,54 @@ def get_jina_embeddings(texts: List[str], retries: int = 3) -> List[List[float]]
                 raise e
     return []
 
+
 def embed_chunks(chunks: List[Chunk], batch_size: int = 64) -> List[EmbeddedChunk]:
     """
-    Takes a list of chunks, batches them, and queries the Jina embeddings API.
+    Takes a list of chunks, batches them, and queries the Jina embeddings API in parallel.
     """
-    if not JINA_API_KEY:
+    if not os.environ.get("JINA_API_KEY"):
         logger.warning("JINA_API_KEY environment variable is not set. Embedding will likely fail.")
         
     embedded_chunks = []
-    total_batches = (len(chunks) + batch_size - 1) // batch_size
     
-    for i in range(0, len(chunks), batch_size):
-        batch = chunks[i : i + batch_size]
+    # Create batches
+    batches = [chunks[i : i + batch_size] for i in range(0, len(chunks), batch_size)]
+    
+    def process_batch(batch_idx, batch):
         texts = [chunk.content for chunk in batch]
-        
-        batch_num = (i // batch_size) + 1
-        logger.info(f"Embedding batch {batch_num}/{total_batches} ({len(batch)} chunks)...")
-        
         embeddings = get_jina_embeddings(texts)
         
-        for chunk, vector in zip(batch, embeddings):
-            embedded_chunks.append(EmbeddedChunk(
-                content=chunk.content,
-                file_path=chunk.file_path,
-                chunk_type=chunk.chunk_type,
-                function_name=chunk.function_name,
-                section_path=chunk.section_path,
-                line_start=chunk.line_start,
-                line_end=chunk.line_end,
-                vector=vector
-            ))
+        if len(embeddings) != len(batch):
+            raise ValueError(f"Jina API returned {len(embeddings)} embeddings for {len(batch)} chunks.")
+            
+        result = []
+        for chunk, emb in zip(batch, embeddings):
+            result.append(
+                EmbeddedChunk(
+                    **chunk.model_dump(),
+                    vector=emb
+                )
+            )
+        return batch_idx, result
+
+    # Execute in parallel with 5 workers
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(process_batch, i, b): i for i, b in enumerate(batches)}
+        
+        # We need to re-sort results based on batch_idx to maintain file/line order, 
+        # as as_completed yields out of order
+        results_by_idx = {}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                batch_idx, batch_result = future.result()
+                results_by_idx[batch_idx] = batch_result
+                logger.info(f"Embedded batch {batch_idx+1}/{len(batches)}.")
+            except Exception as e:
+                logger.error(f"Batch embedding failed: {e}")
+                
+    # Reassemble in exact original order
+    for i in range(len(batches)):
+        if i in results_by_idx:
+            embedded_chunks.extend(results_by_idx[i])
             
     return embedded_chunks
