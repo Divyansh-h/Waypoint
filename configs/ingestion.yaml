@@ -1,0 +1,41 @@
+# Ingestion Pipeline Configuration
+
+# Repository Settings
+repo:
+  path: "/path/to/local/repository"  # e.g., "../scikit-learn"
+  branch: "main"                     # Branch or commit hash to index
+
+# File Filtering
+filtering:
+  include_extensions:
+    - ".py"
+    - ".md"
+  exclude_extensions:
+    - ".pyx"
+    - ".pxd"
+    - ".c"
+    - ".so"
+  exclude_directories:
+    - ".git"
+    - "__pycache__"
+    - "build"
+    - "dist"
+  exclude_test_files: false          # Set to true to drop files matching test_* or *_test.py
+
+# Chunking Parameters (AST + Fallback)
+chunking:
+  strategy: "ast_with_fallback"
+  min_tokens: 50                     # Drop nodes smaller than this (e.g., lambdas, empty inits)
+  max_tokens: 1500                   # The embedding model's context limit
+  
+  # Fallback settings for when an AST node (like a God Function) exceeds max_tokens
+  fallback:
+    method: "recursive_character"    # Fallback to standard text splitting
+    chunk_size: 1000
+    chunk_overlap: 150
+
+# Vector Database (pgvector)
+database:
+  connection_string: "postgresql://user:password@localhost:5432/rag_db"
+  collection_name: "sklearn_code"
+  embedding_model: "text-embedding-3-small"

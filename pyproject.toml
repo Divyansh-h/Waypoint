@@ -1,0 +1,53 @@
+[project]
+name = "waypoint"
+version = "0.1.0"
+description = "AST-based code search and RAG pipeline"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pgvector>=0.2.5",
+    "psycopg2-binary>=2.9.9",
+    "tree-sitter>=0.21.3",
+    "tree-sitter-python>=0.21.0",
+    "qdrant-client>=1.9.1",
+    "openai>=1.30.0",
+    "langchain>=0.2.0",
+    "pydantic>=2.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "ruff>=0.4.4",
+    "black>=24.4.2",
+    "mypy>=1.10.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"] # flake8, pyflakes, isort
+ignore = []
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]
