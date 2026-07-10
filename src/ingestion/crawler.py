@@ -18,13 +18,15 @@ class RepoCrawler:
         exclude_directories: Optional[Set[str]] = None,
     ) -> None:
         """
-        Initialize the RepoCrawler with filtering rules.
+        Initialize the RepoCrawler with strict filtering rules.
+        This exists to ensure we only spend expensive embedding compute resources on files that
+        actually matter for code retrieval, explicitly skipping binaries and dependency folders.
 
         Args:
             repo_path: The root directory path of the repository to crawl.
-            include_extensions: A set of file extensions to include (e.g., {".py", ".md"}).
-            exclude_extensions: A set of file extensions to explicitly ignore.
-            exclude_directories: A set of directory names to skip (e.g., {".git", "venv"}).
+            include_extensions: File extensions to include (e.g., {".py", ".md"}).
+            exclude_extensions: File extensions to explicitly ignore.
+            exclude_directories: Directory names to skip (e.g., {".git", "venv"}).
         """
         self.repo_path = Path(repo_path).resolve()
         
@@ -45,7 +47,10 @@ class RepoCrawler:
 
     def walk(self) -> Iterator[Path]:
         """
-        Walks the repository directory based on the configured rules.
+        Walks the repository directory tree based on configured rules.
+        Crucially, this modifies `dirs` in-place to prune excluded directories at the root level.
+        This is done for performance—so we do not waste time recursively traversing deep,
+        irrelevant paths like `node_modules` or `.git`.
 
         Yields:
             Path: The absolute path to a file that matches the inclusion criteria.

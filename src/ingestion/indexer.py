@@ -15,7 +15,9 @@ logger = logging.getLogger("ingestion_pipeline")
 class PgVectorIndexer:
     """
     Handles indexing EmbeddedChunks into a PostgreSQL database using pgvector.
-    Provides upsert logic using a stable ID to avoid duplicates on re-ingestion.
+    This class abstracts the complexity of database connection management and 
+    hybrid data storage (storing dense vectors alongside raw JSONB metadata), 
+    ensuring that the ingestion pipeline stays decoupled from SQL syntax specifics.
     """
 
     def __init__(self, connection_string: str, table_name: str = "chunks", vector_dim: int = 1024):
@@ -23,7 +25,10 @@ class PgVectorIndexer:
         Args:
             connection_string: Standard Postgres connection URI.
             table_name: The table to insert vectors into.
-            vector_dim: Dimension size of the vectors. Jina-embeddings-v3 is 1024 by default.
+            vector_dim: Dimension size of the vectors. 
+            
+        Note (Flag): `vector_dim` defaults to 1024 (Jina v3 specific). If we swap embedding models,
+        this hardcoded default could cause silent dimension mismatch errors in Postgres.
         """
         self.conn_str = connection_string
         self.table_name = table_name
@@ -34,12 +39,17 @@ class PgVectorIndexer:
         Generates a stable SHA-256 ID based on the file path and the starting line number.
         This guarantees that re-running the pipeline will update the exact same chunk
         instead of creating a duplicate row, even if the content inside the chunk changed.
+        This is the foundation of our idempotent ingestion strategy.
         """
         unique_string = f"{chunk.file_path}:{chunk.line_start}"
         return hashlib.sha256(unique_string.encode('utf-8')).hexdigest()
 
     def _setup_database(self, conn: Any) -> None:
-        """Creates the vector extension and the chunks table if they do not exist."""
+        """
+        Idempotently creates the vector extension and the chunks table if they do not exist.
+        This exists so the pipeline can bootstrap itself on a fresh Postgres instance without
+        requiring external manual database migration scripts.
+        """
         with conn.cursor() as cur:
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
             # Register the vector type with the psycopg2 connection context
@@ -70,7 +80,11 @@ class PgVectorIndexer:
 
     def index_chunks(self, embedded_chunks: List[EmbeddedChunk], batch_size: int = 100) -> None:
         """
-        Upserts a list of EmbeddedChunk objects into the database.
+        Executes a bulk upsert of EmbeddedChunks into the PostgreSQL database using `execute_batch`.
+        This uses `ON CONFLICT` combined with our stable SHA-256 ID to ensure that re-running
+        the pipeline updates existing vectors rather than polluting the DB with duplicate rows.
+        It packs structural context into a `metadata` JSONB column, unlocking powerful hybrid 
+        filtering (e.g. searching only within `sklearn/linear_model`).
         """
         if not embedded_chunks:
             logger.info("No chunks provided to indexer.")

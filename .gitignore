@@ -6,3 +6,7 @@ __pycache__/
 .DS_Store
 tests/scratch_ast.py
 tests/scratch_*.py
+
+# Eval Data
+data/eval/eval_set_draft.jsonl
+results/

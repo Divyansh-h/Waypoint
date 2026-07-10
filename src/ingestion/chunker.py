@@ -18,13 +18,25 @@ class ASTChunker:
     """
 
     def __init__(self, max_lines_per_chunk: int = 100) -> None:
+        """
+        Initializes the Tree-sitter parser for Python.
+        This exists to enable precise, syntax-aware splitting of source code (by Class/Function)
+        rather than relying on arbitrary text windows. This ensures that a massive docstring
+        isn't separated from the actual logic implementation beneath it, preserving LLM retrieval context.
+        """
         self.language = Language(tspython.language())
         self.parser = Parser(self.language)
         self.max_lines_per_chunk = max_lines_per_chunk
 
     def chunk_file(self, file_path: Path) -> List[Chunk]:
         """
-        Reads a Python file, parses its AST, and extracts chunks.
+        Parses a target Python file into an AST and recursively walks it to extract structurally whole
+        components (e.g., a single method or class).
+        This guarantees that LLMs have full context of a code block when retrieved.
+        
+        Note (Flag): The `handle_god_node` fallback blindly slices long functions by line count, 
+        which completely destroys the structural integrity we just used AST to get. Is there a better 
+        fallback for huge nodes?
         """
         try:
             with open(file_path, "rb") as f:

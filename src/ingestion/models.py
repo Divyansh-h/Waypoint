@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseModel, Field, model_validator
+from typing import List, Literal, Optional
 
 
 class Chunk(BaseModel):
@@ -40,3 +41,48 @@ class EmbeddedChunk(Chunk):
     Extends the base Chunk model to include the vector embedding.
     """
     vector: list[float] = Field(..., description="The dense vector embedding.")
+
+class GroundTruth(BaseModel):
+    """
+    Defines the acceptable chunks to solve the query.
+    """
+    acceptable_paths: List[List[str]] = Field(
+        ..., 
+        description="A list of valid resolution paths. Each path is a list of chunk IDs that must ALL be retrieved."
+    )
+
+class EvalExample(BaseModel):
+    """
+    A single evaluation test case for the RAG retrieval system.
+    """
+    id: str = Field(..., description="Unique identifier for the eval example (e.g., 'eval_001').")
+    
+    question: str = Field(
+        ..., 
+        description="The natural language query a user would ask."
+    )
+    
+    ground_truth: GroundTruth
+    
+    difficulty_tag: Literal["easy", "medium", "hard", "adversarial"] = Field(
+        ..., 
+        description="Difficulty level of the question."
+    )
+    
+    question_type: Literal["factual", "debugging", "conceptual", "api_usage", "out_of_scope"] = Field(
+        ..., 
+        description="Categorization of the user intent to ensure diverse testing."
+    )
+
+    metadata: Optional[dict] = Field(
+        default=None,
+        description="Optional context like the source of the question (e.g., GitHub Issue URL)."
+    )
+
+class EvalDataset(BaseModel):
+    """
+    The full suite of evaluation examples.
+    """
+    dataset_name: str
+    version: str
+    examples: List[EvalExample]

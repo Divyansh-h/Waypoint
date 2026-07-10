@@ -14,7 +14,12 @@ JINA_API_URL = "https://api.jina.ai/v1/embeddings"
 
 
 def get_jina_embeddings(texts: List[str], retries: int = 3) -> List[List[float]]:
-    """Calls the Jina API to get embeddings with exponential backoff retry logic."""
+    """
+    Interfaces directly with the Jina embeddings API to convert code/text strings into dense vectors.
+    This function abstracts away the network layer and intentionally implements exponential backoff 
+    because batch processing thousands of chunks will inevitably hit transient network failures 
+    or API rate limits, which would otherwise crash the entire pipeline mid-run.
+    """
     api_key = os.environ.get("JINA_API_KEY", "")
     headers = {
         "Content-Type": "application/json",
@@ -50,7 +55,11 @@ def get_jina_embeddings(texts: List[str], retries: int = 3) -> List[List[float]]
 
 def embed_chunks(chunks: List[Chunk], batch_size: int = 64) -> List[EmbeddedChunk]:
     """
-    Takes a list of chunks, batches them, and queries the Jina embeddings API in parallel.
+    Transforms raw text Chunks into EmbeddedChunks by orchestrating API calls.
+    This function uses a ThreadPoolExecutor to run batches concurrently, which is critical
+    because sequential network IO for thousands of chunks would otherwise become a massive,
+    blocking bottleneck in the ingestion pipeline. It deliberately re-sorts results to maintain
+    the original file order for deterministic indexing.
     """
     if not os.environ.get("JINA_API_KEY"):
         logger.warning("JINA_API_KEY environment variable is not set. Embedding will likely fail.")

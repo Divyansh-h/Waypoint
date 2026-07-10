@@ -16,13 +16,26 @@ class DocChunker:
     """
 
     def __init__(self, max_lines_per_chunk: int = 150) -> None:
+        """
+        Initializes the Markdown chunker with a maximum line limit.
+        This limits the impact of massive, unbroken markdown files by forcibly splitting 
+        them (via a God Section fallback) so they do not exceed the context limits 
+        of our embedding models, while trying to respect semantic boundaries where possible.
+        """
         self.max_lines_per_chunk = max_lines_per_chunk
         # Regex to match markdown headers (e.g., "## My Header")
         self.header_pattern = re.compile(r'^(#{1,6})\s+(.*)')
 
     def chunk_file(self, file_path: Path) -> List[Chunk]:
         """
-        Reads a Markdown file, chunks it by headers, and returns Chunk models.
+        Reads a Markdown file and slices it sequentially based on ATX header hashes (e.g., `###`).
+        This approach exists because standard token-window splitting destroys the semantic
+        hierarchy of documentation. By maintaining a breadcrumb trail (`current_path`),
+        the LLM is given the exact context of the chunk (e.g., 'Installation > Unix').
+        
+        Note (Flag): The `commit_chunk` God section fallback directly slices long content blocks
+        by arbitrary line count without respecting inner markdown structures like lists or code blocks.
+        This could break formatting.
         """
         try:
             with open(file_path, "r", encoding="utf-8") as f:
