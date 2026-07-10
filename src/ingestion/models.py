@@ -12,6 +12,7 @@ class Chunk(BaseModel):
     file_path: str = Field(..., description="The absolute or relative path to the source file.")
     chunk_type: str = Field(..., description="The type of the chunk (e.g., 'class', 'function', 'fallback_text').")
     function_name: Optional[str] = Field(default=None, description="The name of the function or class, if applicable.")
+    section_path: Optional[str] = Field(default=None, description="Markdown header path (e.g. 'Intro > Setup').")
     line_start: int = Field(..., ge=1, description="The 1-indexed starting line number.")
     line_end: int = Field(..., ge=1, description="The 1-indexed ending line number.")
 

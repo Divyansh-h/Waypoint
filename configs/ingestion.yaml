@@ -2,7 +2,7 @@
 
 # Repository Settings
 repo:
-  path: "/path/to/local/repository"  # e.g., "../scikit-learn"
+  path: "/Users/divyansh/code/scikit-learn"
   branch: "main"                     # Branch or commit hash to index
 
 # File Filtering
