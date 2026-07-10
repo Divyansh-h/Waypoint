@@ -4,3 +4,5 @@ logs/
 __pycache__/
 *.pyc
 .DS_Store
+tests/scratch_ast.py
+tests/scratch_*.py

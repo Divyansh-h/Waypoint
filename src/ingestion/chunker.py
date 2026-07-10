@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -5,6 +6,8 @@ import tree_sitter_python as tspython
 from tree_sitter import Language, Parser, Node
 
 from ingestion.models import Chunk
+
+logger = logging.getLogger("ingestion_pipeline")
 
 
 class ASTChunker:
@@ -24,16 +27,27 @@ class ASTChunker:
         Reads a Python file, parses its AST, and extracts chunks.
         """
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                source_code = f.read()
+            with open(file_path, "rb") as f:
+                source_bytes = f.read()
+            # We still need a string version for the God Node line-splitting logic
+            source_code_str = source_bytes.decode("utf-8")
         except Exception as e:
-            raise IOError(f"Failed to read file {file_path}: {e}")
+            logger.warning(f"Skipping unreadable file {file_path}: {e}")
+            return []
 
-        tree = self.parser.parse(bytes(source_code, "utf8"))
+        tree = self.parser.parse(source_bytes)
+        
+        # If Tree-sitter detects syntax errors, the AST will contain ERROR nodes
+        if tree.root_node.has_error:
+            logger.warning(f"Skipping malformed file (syntax errors detected): {file_path}")
+            return []
+            
         chunks: List[Chunk] = []
 
         def extract_code(node: Node) -> str:
-            return source_code[node.start_byte:node.end_byte]
+            # Tree-sitter offsets are in BYTES, not characters.
+            # Slicing a Python string with byte offsets corrupts multi-byte unicode chars!
+            return source_bytes[node.start_byte:node.end_byte].decode("utf-8")
 
         def handle_god_node(chunk: Chunk) -> List[Chunk]:
             """

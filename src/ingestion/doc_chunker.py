@@ -1,8 +1,11 @@
+import logging
 import re
 from pathlib import Path
 from typing import List, Tuple
 
 from ingestion.models import Chunk
+
+logger = logging.getLogger("ingestion_pipeline")
 
 
 class DocChunker:
@@ -25,7 +28,8 @@ class DocChunker:
             with open(file_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
         except Exception as e:
-            raise IOError(f"Failed to read file {file_path}: {e}")
+            logger.warning(f"Skipping unreadable markdown file {file_path}: {e}")
+            return []
 
         chunks: List[Chunk] = []
         # Keeps track of the active header hierarchy: List of (level, title)

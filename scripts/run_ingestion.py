@@ -110,7 +110,7 @@ def main():
             elif file_path.suffix == ".md":
                 all_chunks.extend(doc_chunker.chunk_file(file_path))
         except Exception as e:
-            logger.error(f"Error chunking {file_path}: {e}")
+            logger.warning(f"Unexpected error chunking {file_path}, skipping. Details: {e}")
             
     logger.info(f"Generated a total of {len(all_chunks)} chunks.")
 
