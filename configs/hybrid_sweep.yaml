@@ -1,0 +1,49 @@
+# Hybrid Retrieval Parameter Sweep Configurations
+# Use this config to systematically test different fusion hyperparameters
+
+# ---------------------------------------------------------
+# 1. Reciprocal Rank Fusion (RRF) Sweep
+# Formula: RRF_Score = 1 / (k + rank)
+# 
+# Intuition: 
+# - The standard 'k' is 60 (from University of Waterloo research).
+# - A lower 'k' (e.g., 10) heavily favors the absolute top 1-3 ranks of either method, 
+#   punishing items lower down the list.
+# - A higher 'k' (e.g., 90) flattens the curve, effectively acting as a "consensus filter" 
+#   that strongly favors chunks appearing in BOTH lists, even at moderate ranks.
+# ---------------------------------------------------------
+rrf_sweep:
+  - name: "rrf_k60_standard"
+    k: 60
+  - name: "rrf_k30_top_heavy"
+    k: 30
+  - name: "rrf_k90_consensus"
+    k: 90
+  - name: "rrf_k10_extreme"
+    k: 10
+
+# ---------------------------------------------------------
+# 2. Simple Weighted Score Fusion Sweep
+# Formula: Score = (dense_norm * dense_weight) + (bm25_norm * bm25_weight)
+#
+# Intuition: 
+# - Requires min-max normalization before applying!
+# - Dense is usually given higher weight (0.7 - 0.9) because it captures conceptual 
+#   intent better, using BM25 strictly as a keyword tie-breaker.
+# ---------------------------------------------------------
+weighted_sweep:
+  - name: "weighted_balanced"
+    dense_weight: 0.5
+    bm25_weight: 0.5
+    
+  - name: "weighted_dense_leaning"
+    dense_weight: 0.7
+    bm25_weight: 0.3
+    
+  - name: "weighted_dense_dominant"
+    dense_weight: 0.9
+    bm25_weight: 0.1
+    
+  - name: "weighted_bm25_leaning"
+    dense_weight: 0.3
+    bm25_weight: 0.7

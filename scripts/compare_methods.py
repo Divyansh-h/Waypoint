@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -24,10 +25,16 @@ logger = logging.getLogger("compare_methods")
 def evaluate_method(examples, conn, table_name, method, verbose=False):
     results_k5 = []
     results_k10 = []
+    latencies = []
     
     for example in examples:
-        # Retrieve top 10 for the method
+        # Measure wall-clock latency for retrieval
+        t0 = time.time()
         retrieved_10 = retrieve_chunks(conn, table_name, example.question, method=method, k=10)
+        t1 = time.time()
+        
+        latency_ms = (t1 - t0) * 1000
+        latencies.append(latency_ms)
         
         # Evaluate for K=5
         res_5 = evaluate_example(example, retrieved_10[:5])
@@ -56,10 +63,24 @@ def evaluate_method(examples, conn, table_name, method, verbose=False):
     # MRR is typically computed over the full retrieved list (K=10)
     mrr = sum(r["reciprocal_rank"] for r in results_k10) / total
     
+    # Compute latency statistics
+    if latencies:
+        latencies.sort()
+        p50 = latencies[len(latencies) // 2]
+        p95_idx = int(0.95 * len(latencies))
+        p95_idx = min(p95_idx, len(latencies) - 1)
+        p95 = latencies[p95_idx]
+        mean_lat = sum(latencies) / len(latencies)
+    else:
+        p50 = p95 = mean_lat = 0.0
+    
     return {
         "recall_5": recall_5,
         "recall_10": recall_10,
         "mrr": mrr,
+        "p50_latency_ms": p50,
+        "p95_latency_ms": p95,
+        "mean_latency_ms": mean_lat,
         "raw_results": results_k10
     }
 
@@ -68,6 +89,8 @@ def main():
     parser = argparse.ArgumentParser(description="Compare Retrieval Methods")
     parser.add_argument("--eval-file", type=str, default="data/eval/eval_set.jsonl")
     parser.add_argument("-v", "--verbose", action="store_true", help="Print per-question retrieval details")
+    parser.add_argument("--pool-size", type=int, help="Override the reranker candidate pool size (e.g. 20, 30, 50)")
+    parser.add_argument("--out-dir", type=str, default="results/week3", help="Directory to save the comparison run JSON")
     args = parser.parse_args()
 
     eval_file_path = Path(args.eval_file)
@@ -89,6 +112,11 @@ def main():
     conn_str, table_name = load_db_config()
     conn = get_db_connection(conn_str)
     
+    if args.pool_size:
+        import scripts.run_eval
+        scripts.run_eval.GLOBAL_POOL_SIZE_OVERRIDE = args.pool_size
+        logger.info(f"Overriding candidate pool size to: {args.pool_size}")
+    
     methods = list(RETRIEVAL_METHODS.keys())
     comparison = {}
     
@@ -109,6 +137,8 @@ def main():
     table.add_column("Recall@5", justify="right", style="yellow")
     table.add_column("Recall@10", justify="right", style="green")
     table.add_column("MRR (Top 10)", justify="right", style="blue")
+    table.add_column("P50 Latency", justify="right", style="cyan")
+    table.add_column("P95 Latency", justify="right", style="red")
 
     for method in methods:
         stats = comparison[method]
@@ -116,7 +146,9 @@ def main():
             method.upper(), 
             f"{stats['recall_5']:.1f}%", 
             f"{stats['recall_10']:.1f}%", 
-            f"{stats['mrr']:.4f}"
+            f"{stats['mrr']:.4f}",
+            f"{stats['p50_latency_ms']:.1f}ms",
+            f"{stats['p95_latency_ms']:.1f}ms"
         )
 
     console.print()
@@ -152,7 +184,7 @@ def main():
         console.print("[bold green]No misses detected! All questions answered correctly in top 10.[/bold green]\n")
 
     # Save detailed JSON output for manual inspection of mismatches
-    results_dir = Path(__file__).parent.parent / "results"
+    results_dir = root_dir / args.out_dir
     results_dir.mkdir(parents=True, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

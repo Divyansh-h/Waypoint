@@ -25,6 +25,9 @@ from ingestion.embed import get_jina_embeddings
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("run_eval")
 
+# Global override for CLI sweeping
+GLOBAL_POOL_SIZE_OVERRIDE = None
+
 
 def load_db_config(config_path="configs/ingestion.yaml"):
     try:
@@ -124,12 +127,90 @@ def _retrieve_hybrid(conn, table_name: str, query: str, k: int) -> List[str]:
         conn.rollback()
         return []
 
+def _retrieve_reranked_hybrid(conn, table_name: str, query: str, k: int) -> List[str]:
+    """
+    Two-stage retrieval: Uses Hybrid RRF to pull a larger candidate pool (Top-30),
+    then passes them to a Cross-Encoder for precise reranking down to Top-K.
+    """
+    try:
+        import yaml
+        with open("configs/ingestion.yaml", "r") as f:
+            config = yaml.safe_load(f)
+        retrieval_cfg = config.get("retrieval", {})
+        
+        global GLOBAL_POOL_SIZE_OVERRIDE
+        if GLOBAL_POOL_SIZE_OVERRIDE is not None:
+            pool_size = GLOBAL_POOL_SIZE_OVERRIDE
+        else:
+            pool_size = retrieval_cfg.get("candidate_pool_size", 30)
+            
+        model_name = retrieval_cfg.get("reranker_model", "stub")
+        cache_dir = retrieval_cfg.get("model_cache_dir", ".models_cache")
+        
+        from retrieval.reranker import get_reranker
+        reranker = get_reranker(model_name, cache_dir)
+    except ImportError:
+        logger.error("Failed to import Reranker. Check your python path.")
+        return []
+    except Exception as e:
+        logger.error(f"Failed to load retrieval config: {e}")
+        pool_size = 30
+        
+    try:
+        embeddings = get_jina_embeddings([query])
+        if not embeddings:
+            return []
+        query_vector = embeddings[0]
+        
+        with conn.cursor() as cur:
+            # We must select 'content' so the cross-encoder has text to evaluate
+            cur.execute(
+                f"""
+                WITH semantic_search AS (
+                    SELECT id, content, ROW_NUMBER() OVER (ORDER BY embedding <=> %s::vector) as rank 
+                    FROM {table_name} 
+                    LIMIT %s
+                ), keyword_search AS (
+                    SELECT id, content, ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', %s)) DESC) as rank
+                    FROM {table_name} 
+                    WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s) 
+                    LIMIT %s
+                )
+                SELECT COALESCE(s.id, k.id) as id,
+                       COALESCE(s.content, k.content) as content,
+                       s.rank as dense_rank, 
+                       k.rank as bm25_rank,
+                       COALESCE(1.0 / (60 + s.rank), 0.0) + COALESCE(1.0 / (60 + k.rank), 0.0) as rrf_score
+                FROM semantic_search s FULL OUTER JOIN keyword_search k ON s.id = k.id
+                ORDER BY rrf_score DESC 
+                LIMIT %s;
+                """,
+                (query_vector, pool_size, query, query, pool_size, pool_size)
+            )
+            
+            results = cur.fetchall()
+            
+            # Map database rows to dictionaries for the reranker
+            candidates = [{"id": r[0], "content": r[1], "rrf_score": r[4]} for r in results]
+            
+            # Stage 2: Rerank
+            ranked_candidates = reranker.rerank(query, candidates)
+            
+            # Return final top-K IDs
+            return [c["id"] for c in ranked_candidates[:k]]
+            
+    except Exception as e:
+        logger.error(f"Reranked Hybrid retrieval failed: {e}")
+        conn.rollback()
+        return []
+
 
 # Registry for easy plug-and-play of future retrieval presets
 RETRIEVAL_METHODS = {
     "dense": _retrieve_dense,
     "bm25": _retrieve_bm25,
     "hybrid": _retrieve_hybrid,
+    "reranked_hybrid": _retrieve_reranked_hybrid,
 }
 
 def retrieve_chunks(conn, table_name: str, query: str, method: str, k: int = 10) -> List[str]:

@@ -39,3 +39,9 @@ database:
   connection_string: "postgresql://user:password@localhost:5432/rag_db"
   collection_name: "sklearn_code"
   embedding_model: "text-embedding-3-small"
+
+# Retrieval Configuration
+retrieval:
+  candidate_pool_size: 30
+  reranker_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  model_cache_dir: ".models_cache"
