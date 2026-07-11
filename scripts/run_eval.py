@@ -6,6 +6,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
+import psycopg2
+from pgvector.psycopg2 import register_vector
+import yaml
+
 from rich.console import Console
 from rich.table import Table
 
@@ -16,46 +20,77 @@ if str(src_dir) not in sys.path:
 
 from eval.loader import load_eval_set
 from ingestion.models import EvalExample
+from ingestion.embed import get_jina_embeddings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("run_eval")
 
 
-def mock_retrieve(query: str, method: str, k: int = 10) -> List[str]:
+def load_db_config(config_path="configs/ingestion.yaml"):
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+        return config["database"]["connection_string"], config["database"].get("collection_name", "chunks")
+    except Exception as e:
+        logger.error(f"Error loading config: {e}")
+        return "postgresql://user:password@localhost:5432/rag_db", "chunks"
+
+
+def get_db_connection(conn_str):
+    try:
+        conn = psycopg2.connect(conn_str)
+        register_vector(conn)
+        return conn
+    except Exception as e:
+        logger.error(f"Failed to connect to database: {e}")
+        sys.exit(1)
+
+
+def retrieve_chunks(conn, table_name: str, query: str, method: str, k: int = 10) -> List[str]:
     """
-    STUB: Simulates retrieving top-K chunk IDs using different strategies.
-    In a real implementation, this would connect to Postgres.
+    Retrieves top-K chunk IDs using different strategies.
+    Connects to Postgres to perform real semantic search.
     """
-    # -----------------------------------------------------------------
-    # REAL IMPLEMENTATION STUBS (To be replaced with actual psycopg2 code)
-    # -----------------------------------------------------------------
     if method == "dense":
-        # SQL: SELECT id FROM chunks ORDER BY embedding <=> %s::vector LIMIT k
-        pass
+        try:
+            embeddings = get_jina_embeddings([query])
+            if not embeddings:
+                return []
+            query_vector = embeddings[0]
+            
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"SELECT id FROM {table_name} ORDER BY embedding <=> %s::vector LIMIT %s",
+                    (query_vector, k)
+                )
+                return [row[0] for row in cur.fetchall()]
+        except Exception as e:
+            logger.error(f"Dense retrieval failed: {e}")
+            return []
+            
     elif method == "bm25":
-        # SQL: SELECT id FROM chunks 
-        #      WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s)
-        #      ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', %s)) DESC LIMIT k
-        pass
+        try:
+            with conn.cursor() as cur:
+                # Standard BM25 (or ts_rank equivalent) over the content column
+                cur.execute(
+                    f"""
+                    SELECT id FROM {table_name}
+                    WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s)
+                    ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', %s)) DESC
+                    LIMIT %s
+                    """,
+                    (query, query, k)
+                )
+                return [row[0] for row in cur.fetchall()]
+        except Exception as e:
+            logger.error(f"BM25 retrieval failed: {e}")
+            return []
+            
     elif method == "hybrid":
-        # SQL: Reciprocal Rank Fusion (RRF) via Common Table Expressions (CTE)
-        # WITH semantic_search AS (
-        #     SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> %s::vector) as rank 
-        #     FROM chunks LIMIT k
-        # ), keyword_search AS (
-        #     SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', %s)) DESC) as rank
-        #     FROM chunks WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s) LIMIT k
-        # )
-        # SELECT COALESCE(s.id, k.id) as id, 
-        #        COALESCE(1.0 / (60 + s.rank), 0.0) + COALESCE(1.0 / (60 + k.rank), 0.0) as rrf_score
-        # FROM semantic_search s FULL OUTER JOIN keyword_search k ON s.id = k.id
-        # ORDER BY rrf_score DESC LIMIT k;
+        # TODO: Implement hybrid RRF search
         pass
 
-    # For testing the pipeline, let's pretend it occasionally finds the dummy ID
-    if "Placeholder" in query:
-        return ["chunk_id_999", "chunk_id_123", "chunk_id_777"][:k]
-    return [f"dummy_chunk_{i}" for i in range(k)]
+    return []
 
 
 def evaluate_example(example: EvalExample, retrieved_chunks: List[str]) -> dict:
@@ -117,13 +152,18 @@ def main():
         logger.warning("Evaluation dataset is empty.")
         sys.exit(0)
 
+    conn_str, table_name = load_db_config()
+    conn = get_db_connection(conn_str)
+
     logger.info(f"Running retrieval for {len(examples)} questions (Method: {args.method.upper()}, K={args.k})...")
     
     results = []
     for example in examples:
-        retrieved = mock_retrieve(example.question, method=args.method, k=args.k)
+        retrieved = retrieve_chunks(conn, table_name, example.question, method=args.method, k=args.k)
         result = evaluate_example(example, retrieved)
         results.append(result)
+        
+    conn.close()
 
     # Compute aggregate metrics
     total = len(results)
