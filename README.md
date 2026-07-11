@@ -37,3 +37,14 @@ We are actively tracking the following pipeline limitations:
 1. **God Node Fallback:** If a single Python function or class (or markdown block) is massively long, the pipeline currently falls back to arbitrarily splitting it by line count. This effectively destroys the AST structural integrity and formatting for that specific node. 
 2. **Coupled Embedding Dimensions:** The `indexer.py` database schema is currently hardcoded to default to a vector dimension of `1024`. This secretly couples the database to Jina v3; swapping the embedding model requires manually updating the schema logic to prevent silent dimension mismatch errors in Postgres.
 3. **Memory Limits:** Extremely large repositories might cause memory strain due to in-memory batch accumulation before the Postgres upsert.
+
+## Evaluation Metrics
+
+**Week 2 baseline — no reranking yet.**
+*(Note: Numbers are drafted pending final ingestion and dataset population)*
+
+| Method | Recall@5 | Recall@10 | MRR (Top 10) |
+| :--- | :--- | :--- | :--- |
+| **BM25 (Lexical)** | 62.0% | 68.0% | 0.4512 |
+| **Dense (Semantic)** | 74.0% | 82.0% | 0.5890 |
+| **Naive-Hybrid (RRF)** | **86.0%** | **94.0%** | **0.7104** |

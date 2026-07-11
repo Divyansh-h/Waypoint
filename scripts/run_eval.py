@@ -46,51 +46,101 @@ def get_db_connection(conn_str):
         sys.exit(1)
 
 
+def _retrieve_dense(conn, table_name: str, query: str, k: int) -> List[str]:
+    try:
+        embeddings = get_jina_embeddings([query])
+        if not embeddings:
+            return []
+        query_vector = embeddings[0]
+        
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT id FROM {table_name} ORDER BY embedding <=> %s::vector LIMIT %s",
+                (query_vector, k)
+            )
+            return [row[0] for row in cur.fetchall()]
+    except Exception as e:
+        logger.error(f"Dense retrieval failed: {e}")
+        conn.rollback()
+        return []
+
+def _retrieve_bm25(conn, table_name: str, query: str, k: int) -> List[str]:
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT id FROM {table_name}
+                WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s)
+                ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', %s)) DESC
+                LIMIT %s
+                """,
+                (query, query, k)
+            )
+            return [row[0] for row in cur.fetchall()]
+    except Exception as e:
+        logger.error(f"BM25 retrieval failed: {e}")
+        conn.rollback()
+        return []
+
+def _retrieve_hybrid(conn, table_name: str, query: str, k: int) -> List[str]:
+    try:
+        embeddings = get_jina_embeddings([query])
+        if not embeddings:
+            return []
+        query_vector = embeddings[0]
+        
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                WITH semantic_search AS (
+                    SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> %s::vector) as rank 
+                    FROM {table_name} 
+                    LIMIT %s
+                ), keyword_search AS (
+                    SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', %s)) DESC) as rank
+                    FROM {table_name} 
+                    WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s) 
+                    LIMIT %s
+                )
+                SELECT COALESCE(s.id, k.id) as id, 
+                       s.rank as dense_rank, 
+                       k.rank as bm25_rank,
+                       COALESCE(1.0 / (60 + s.rank), 0.0) + COALESCE(1.0 / (60 + k.rank), 0.0) as rrf_score
+                FROM semantic_search s FULL OUTER JOIN keyword_search k ON s.id = k.id
+                ORDER BY rrf_score DESC 
+                LIMIT %s;
+                """,
+                (query_vector, k, query, query, k, k)
+            )
+            
+            results = cur.fetchall()
+            logger.debug("Hybrid Search Ranks:")
+            for r in results:
+                logger.debug(f"ID: {r[0]}, Dense Rank: {r[1]}, BM25 Rank: {r[2]}, RRF Score: {r[3]:.4f}")
+                
+            return [row[0] for row in results]
+    except Exception as e:
+        logger.error(f"Hybrid retrieval failed: {e}")
+        conn.rollback()
+        return []
+
+
+# Registry for easy plug-and-play of future retrieval presets
+RETRIEVAL_METHODS = {
+    "dense": _retrieve_dense,
+    "bm25": _retrieve_bm25,
+    "hybrid": _retrieve_hybrid,
+}
+
 def retrieve_chunks(conn, table_name: str, query: str, method: str, k: int = 10) -> List[str]:
     """
-    Retrieves top-K chunk IDs using different strategies.
-    Connects to Postgres to perform real semantic search.
+    Retrieves top-K chunk IDs using the requested preset.
     """
-    if method == "dense":
-        try:
-            embeddings = get_jina_embeddings([query])
-            if not embeddings:
-                return []
-            query_vector = embeddings[0]
-            
-            with conn.cursor() as cur:
-                cur.execute(
-                    f"SELECT id FROM {table_name} ORDER BY embedding <=> %s::vector LIMIT %s",
-                    (query_vector, k)
-                )
-                return [row[0] for row in cur.fetchall()]
-        except Exception as e:
-            logger.error(f"Dense retrieval failed: {e}")
-            return []
-            
-    elif method == "bm25":
-        try:
-            with conn.cursor() as cur:
-                # Standard BM25 (or ts_rank equivalent) over the content column
-                cur.execute(
-                    f"""
-                    SELECT id FROM {table_name}
-                    WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s)
-                    ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', %s)) DESC
-                    LIMIT %s
-                    """,
-                    (query, query, k)
-                )
-                return [row[0] for row in cur.fetchall()]
-        except Exception as e:
-            logger.error(f"BM25 retrieval failed: {e}")
-            return []
-            
-    elif method == "hybrid":
-        # TODO: Implement hybrid RRF search
-        pass
-
-    return []
+    if method not in RETRIEVAL_METHODS:
+        logger.error(f"Unknown retrieval method: {method}")
+        return []
+        
+    return RETRIEVAL_METHODS[method](conn, table_name, query, k)
 
 
 def evaluate_example(example: EvalExample, retrieved_chunks: List[str]) -> dict:
@@ -118,10 +168,16 @@ def evaluate_example(example: EvalExample, retrieved_chunks: List[str]) -> dict:
                 
         if path_satisfied:
             is_hit = True
-            # The rank of a multi-hop path is determined by the LAST chunk you have to read
-            path_max_rank = max(path_ranks)
-            if path_max_rank < best_rank:
-                best_rank = path_max_rank
+            # The rank of a multi-hop path is determined by the LAST chunk you have to read.
+            # However, if a path requires N chunks, the absolute best max rank is N.
+            # To avoid penalizing multi-hop queries, we normalize the rank.
+            # Effective Rank = Actual Max Rank - N + 1
+            # A perfect 3-hop retrieval at ranks 1,2,3 gives Max Rank 3 -> Effective Rank 1 (RR 1.0)
+            actual_max_rank = max(path_ranks)
+            effective_rank = actual_max_rank - len(path) + 1
+            
+            if effective_rank < best_rank:
+                best_rank = effective_rank
 
     return {
         "id": example.id,
@@ -137,8 +193,8 @@ def main():
     parser = argparse.ArgumentParser(description="Run Retrieval Evaluation")
     parser.add_argument("--eval-file", type=str, default="data/eval/eval_set.jsonl", help="Path to the JSONL eval set")
     parser.add_argument("--k", type=int, default=10, help="Number of chunks to retrieve (Top-K)")
-    parser.add_argument("--method", type=str, choices=["dense", "bm25", "hybrid"], default="dense", 
-                        help="The retrieval strategy to evaluate (dense, bm25, or hybrid RRF).")
+    parser.add_argument("--method", type=str, choices=list(RETRIEVAL_METHODS.keys()), default="dense", 
+                        help="The retrieval strategy to evaluate.")
     args = parser.parse_args()
 
     eval_file_path = Path(args.eval_file)

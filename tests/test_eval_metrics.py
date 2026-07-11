@@ -8,6 +8,7 @@ sys.path.insert(0, str(root_dir))
 sys.path.insert(0, str(root_dir / "src"))
 
 from scripts.run_eval import evaluate_example
+from eval.metrics import cluster_failures
 from ingestion.models import EvalExample, GroundTruth
 
 def create_mock_example(acceptable_paths: list[list[str]]) -> EvalExample:
@@ -67,14 +68,14 @@ def test_logical_and_multi_hop_takes_worst_rank():
     # Ground Truth says we MUST find BOTH A and B to solve the query
     example = create_mock_example([["chunk_A", "chunk_B"]])
     # A is found at rank 1, B is found at rank 3.
-    # The agent doesn't have the full context until rank 3, so rank should be 3.
+    # Actual max rank is 3. Path length is 2. Effective rank = 3 - 2 + 1 = 2.
     retrieved = ["chunk_A", "chunk_X", "chunk_B", "chunk_Y"]
     
     result = evaluate_example(example, retrieved)
     
     assert result["hit"] is True
-    assert result["rank"] == 3
-    assert result["reciprocal_rank"] == pytest.approx(1.0 / 3.0)
+    assert result["rank"] == 2
+    assert result["reciprocal_rank"] == 0.5
 
 def test_logical_and_multi_hop_miss():
     # Ground truth needs BOTH A and B
@@ -93,11 +94,11 @@ def test_complex_hybrid_or_and():
     example = create_mock_example([["chunk_A", "chunk_B"], ["chunk_C"]])
     
     # Scenario 1: A and B are found at rank 4 and 5. C is not found.
-    # Result -> hit at rank 5.
+    # Path length 2, max rank 5 -> Effective rank 4
     retrieved_1 = ["chunk_X", "chunk_Y", "chunk_Z", "chunk_A", "chunk_B"]
     res_1 = evaluate_example(example, retrieved_1)
     assert res_1["hit"] is True
-    assert res_1["rank"] == 5
+    assert res_1["rank"] == 4
     
     # Scenario 2: C is found at rank 2. A is found at rank 5. (B missing).
     # Result -> hit at rank 2 via the ["chunk_C"] OR path.
@@ -105,3 +106,29 @@ def test_complex_hybrid_or_and():
     res_2 = evaluate_example(example, retrieved_2)
     assert res_2["hit"] is True
     assert res_2["rank"] == 2
+
+def test_cluster_failures_standard():
+    misses = [
+        {"id": "q1", "difficulty": "hard", "type": "conceptual", "hit": False},
+        {"id": "q2", "difficulty": "hard", "type": "conceptual", "hit": False},
+        {"id": "q3", "difficulty": "medium", "type": "factual", "hit": False},
+        {"id": "q4", "difficulty": "easy", "type": "conceptual", "hit": False},
+    ]
+    
+    diff_counts, type_counts = cluster_failures(misses)
+    
+    assert diff_counts == {"HARD": 2, "MEDIUM": 1, "EASY": 1}
+    assert type_counts == {"CONCEPTUAL": 3, "FACTUAL": 1}
+
+def test_cluster_failures_empty():
+    diff_counts, type_counts = cluster_failures([])
+    assert diff_counts == {}
+    assert type_counts == {}
+    
+def test_cluster_failures_missing_keys():
+    misses = [
+        {"id": "q1", "hit": False} # missing difficulty and type
+    ]
+    diff_counts, type_counts = cluster_failures(misses)
+    assert diff_counts == {"UNKNOWN": 1}
+    assert type_counts == {"UNKNOWN": 1}

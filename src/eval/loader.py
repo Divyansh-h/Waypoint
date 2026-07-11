@@ -11,7 +11,7 @@ src_dir = Path(__file__).parent.parent
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
-from ingestion.models import EvalExample
+from ingestion.models import EvalExample  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("eval_loader")
@@ -52,7 +52,10 @@ def load_eval_set(filepath: Union[str, Path]) -> List[EvalExample]:
                 errors += 1
                 
     if errors > 0:
-        raise ValueError(f"Failed to load eval set. Found {errors} malformed line(s). Please fix the JSONL file.")
+        raise ValueError(
+            f"Failed to load eval set. Found {errors} malformed line(s). "
+            "Please fix the JSONL file."
+        )
         
     logger.info(f"✅ Successfully loaded and validated {len(examples)} evaluation examples.")
     return examples
