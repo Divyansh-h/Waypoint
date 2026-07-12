@@ -1,0 +1,38 @@
+# Configuration for Phase 2 Synthetic Training Data Generation Pipeline
+
+synthetic_generation:
+  # The model to call for generating queries from code chunks. 
+  # (e.g., gemini-2.5-flash, gpt-4o-mini)
+  llm_model: "gemini-2.5-flash"
+  
+  # Number of AST chunks to send to the LLM API concurrently
+  batch_size: 50
+  
+  # Path to the few-shot template enforcing human-like, intent-based questions
+  prompt_template_path: "prompts/synthetic_qa_generation.txt"
+
+mining:
+  # How many dense nearest-neighbor chunks to retrieve as hard negatives per query
+  hard_negatives_per_query: 5
+  
+  # The baseline model used to perform the ANN search for those negatives
+  baseline_embedding_model: "jina-embeddings-v3"
+  
+  # Path to the Phase 1 failure telemetry used for surgical hard negative curation
+  failure_log_path: "results/week3/compare_run_20260712_133441.json"
+
+filtering:
+  # Anti-Leakage constraints
+  max_query_length_words: 25
+  min_query_length_words: 4
+  
+  # Reject synthetic queries that overlap too heavily with the target chunk's docstring
+  max_docstring_overlap_ratio: 0.75 
+
+splitting:
+  # Ratios for the final dataset output
+  train_ratio: 0.8
+  val_ratio: 0.2
+  
+  # Strategy to prevent test-set leakage. (module_level ensures 100% isolation)
+  split_strategy: "module_level" 

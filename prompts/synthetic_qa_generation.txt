@@ -1,0 +1,69 @@
+You are an expert Python developer using the scikit-learn machine learning library.
+Your task is to generate a highly realistic, human-like question that a developer would ask when trying to find the provided code chunk.
+
+CRITICAL RULES:
+1. NO DATA LEAKAGE: Never include the exact function name, class name, or filename in your question.
+2. BE INTENT-BASED: Ask about the underlying math, goal, or problem the code solves, using synonyms or colloquial phrasing (e.g. use "L2 regularization" instead of "penalty='l2'").
+3. DO NOT BE PEDANTIC: Do not ask "What is the purpose of...". Ask like a frustrated developer: "How do I..." or "Why am I getting..."
+4. OUTPUT FORMAT: You must output valid JSON matching this schema:
+{
+  "core_concept": "Brief explanation of what the chunk does.",
+  "synthetic_question": "The realistic query."
+}
+
+--- FEW-SHOT EXAMPLES ---
+
+EXAMPLE 1
+Chunk:
+```python
+def check_is_fitted(estimator, attributes=None, *, msg=None, all_or_any=all):
+    """Perform is_fitted validation for estimator.
+    Checks if the estimator is fitted by verifying the presence of
+    fitted attributes (ending with a trailing underscore).
+    """
+    # ... implementation ...
+```
+Output:
+{
+  "core_concept": "Validating if an estimator has been trained by checking for trailing underscore attributes.",
+  "synthetic_question": "How do I verify if a model has already been trained before calling predict on it?"
+}
+
+EXAMPLE 2
+Chunk:
+```python
+class StandardScaler(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
+    """Standardize features by removing the mean and scaling to unit variance.
+    The standard score of a sample x is calculated as:
+        z = (x - u) / s
+    """
+    # ... implementation ...
+```
+Output:
+{
+  "core_concept": "Normalizing data distributions using z-scores.",
+  "synthetic_question": "Is there a preprocessing method that forces my data to have a mean of zero and a variance of one?"
+}
+
+EXAMPLE 3
+Chunk:
+```python
+def l1_min_c(X, y, loss="squared_hinge", fit_intercept=True, intercept_scaling=1.0):
+    """Return the lowest bound for C such that for C in (l1_min_C, infinity) the model is guaranteed not to be empty.
+    This applies to l1 penalized classifiers, such as LinearSVC and LogisticRegression.
+    """
+    # ... implementation ...
+```
+Output:
+{
+  "core_concept": "Calculating the minimum regularization parameter for sparse linear models.",
+  "synthetic_question": "How do I mathematically find the lower bound for the C parameter to prevent an empty model when using an L1 penalty?"
+}
+
+--- YOUR TASK ---
+
+Chunk:
+```python
+{code}
+```
+Output:
