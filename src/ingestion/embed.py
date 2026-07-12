@@ -20,6 +20,12 @@ def get_jina_embeddings(texts: List[str], retries: int = 3) -> List[List[float]]
     because batch processing thousands of chunks will inevitably hit transient network failures 
     or API rate limits, which would otherwise crash the entire pipeline mid-run.
     """
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+        
     api_key = os.environ.get("JINA_API_KEY", "")
     headers = {
         "Content-Type": "application/json",
@@ -84,10 +90,15 @@ def embed_chunks(chunks: List[Chunk], batch_size: int = 64) -> List[EmbeddedChun
                     vector=emb
                 )
             )
+        
+        # Rate limit protection
+        import time
+        time.sleep(1)
+        
         return batch_idx, result
 
-    # Execute in parallel with 5 workers
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    # Execute sequentially to avoid 429 Free Tier rate limits
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         futures = {executor.submit(process_batch, i, b): i for i, b in enumerate(batches)}
         
         # We need to re-sort results based on batch_idx to maintain file/line order, 

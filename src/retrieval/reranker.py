@@ -1,12 +1,15 @@
 import os
+import logging
 from typing import List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 class Reranker:
     """
     A cross-encoder reranker that evaluates query-document pairs simultaneously 
     to provide high-precision relevance scores.
     """
-    def __init__(self, model_name: str = "stub-reranker", cache_dir: str = ".models_cache"):
+    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2", cache_dir: str = ".models_cache"):
         self.model_name = model_name
         self.cache_dir = cache_dir
         
@@ -14,7 +17,16 @@ class Reranker:
         os.environ["HF_HOME"] = os.path.abspath(self.cache_dir)
         os.environ["SENTENCE_TRANSFORMERS_HOME"] = os.path.abspath(self.cache_dir)
         
-        # TODO: Initialize actual cross-encoder model here (e.g., sentence-transformers)
+        if self.model_name != "stub":
+            try:
+                from sentence_transformers import CrossEncoder
+                logger.info(f"Loading CrossEncoder model: {self.model_name}...")
+                self.model = CrossEncoder(self.model_name)
+            except ImportError:
+                logger.error("sentence-transformers is not installed. Please install it.")
+                self.model = None
+        else:
+            self.model = None
         
     def rerank(self, query: str, candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -28,16 +40,25 @@ class Reranker:
         Returns:
             A new list of candidate dictionaries sorted by the reranker's score (descending).
         """
-        # TODO: Implement real cross-encoder prediction loop here.
-        # Example: 
-        # pairs = [[query, c["content"]] for c in candidates]
-        # scores = self.model.predict(pairs)
-        # for c, s in zip(candidates, scores):
-        #     c["reranker_score"] = s
-        # return sorted(candidates, key=lambda x: x["reranker_score"], reverse=True)
+        if not candidates:
+            return []
+            
+        if self.model_name == "stub" or self.model is None:
+            # Fallback to returning in original order
+            return candidates
+            
+        # Format input for the cross-encoder: a list of [query, document] pairs
+        pairs = [[query, c["content"]] for c in candidates]
         
-        # STUB: For now, we return the candidates in their original order.
-        return candidates
+        # Predict relevance scores
+        scores = self.model.predict(pairs)
+        
+        # Assign scores back to candidates
+        for i, candidate in enumerate(candidates):
+            candidate["reranker_score"] = float(scores[i])
+            
+        # Sort descending by the cross-encoder score
+        return sorted(candidates, key=lambda x: x.get("reranker_score", 0), reverse=True)
 
 _instance = None
 

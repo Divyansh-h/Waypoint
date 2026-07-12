@@ -276,6 +276,7 @@ def main():
     parser.add_argument("--k", type=int, default=10, help="Number of chunks to retrieve (Top-K)")
     parser.add_argument("--method", type=str, choices=list(RETRIEVAL_METHODS.keys()), default="dense", 
                         help="The retrieval strategy to evaluate.")
+    parser.add_argument("--out-dir", type=str, default="results/week3", help="Directory to save the run JSON")
     args = parser.parse_args()
 
     eval_file_path = Path(args.eval_file)
@@ -350,7 +351,7 @@ def main():
     console.print()
 
     # Save Results
-    results_dir = Path(__file__).parent.parent / "results"
+    results_dir = Path(__file__).parent.parent / args.out_dir
     results_dir.mkdir(parents=True, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

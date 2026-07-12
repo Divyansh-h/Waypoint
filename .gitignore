@@ -10,3 +10,8 @@ tests/scratch_*.py
 # Eval Data
 data/eval/eval_set_draft.jsonl
 results/
+
+# Environment and Cache
+.env
+.env.*
+.models_cache/
