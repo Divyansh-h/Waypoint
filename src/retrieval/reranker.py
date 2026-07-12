@@ -1,6 +1,6 @@
-import os
 import logging
-from typing import List, Dict, Any
+import os
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +9,11 @@ class Reranker:
     A cross-encoder reranker that evaluates query-document pairs simultaneously 
     to provide high-precision relevance scores.
     """
-    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2", cache_dir: str = ".models_cache"):
+    def __init__(
+        self, 
+        model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2", 
+        cache_dir: str = ".models_cache"
+    ):
         self.model_name = model_name
         self.cache_dir = cache_dir
         
@@ -22,9 +26,12 @@ class Reranker:
                 from sentence_transformers import CrossEncoder
                 logger.info(f"Loading CrossEncoder model: {self.model_name}...")
                 self.model = CrossEncoder(self.model_name)
-            except ImportError:
+            except ImportError as e:
                 logger.error("sentence-transformers is not installed. Please install it.")
-                self.model = None
+                raise RuntimeError(f"Missing dependency for reranker: {e}") from e
+            except Exception as e:
+                logger.error(f"Failed to load CrossEncoder model {self.model_name}: {e}")
+                raise RuntimeError(f"Failed to load reranker model: {e}") from e
         else:
             self.model = None
         
@@ -43,9 +50,12 @@ class Reranker:
         if not candidates:
             return []
             
-        if self.model_name == "stub" or self.model is None:
+        if self.model_name == "stub":
             # Fallback to returning in original order
             return candidates
+            
+        if getattr(self, "model", None) is None:
+            raise RuntimeError("Reranker model is not loaded. Cannot perform reranking.")
             
         # Format input for the cross-encoder: a list of [query, document] pairs
         pairs = [[query, c["content"]] for c in candidates]

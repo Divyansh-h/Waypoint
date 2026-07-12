@@ -38,13 +38,40 @@ We are actively tracking the following pipeline limitations:
 2. **Coupled Embedding Dimensions:** The `indexer.py` database schema is currently hardcoded to default to a vector dimension of `1024`. This secretly couples the database to Jina v3; swapping the embedding model requires manually updating the schema logic to prevent silent dimension mismatch errors in Postgres.
 3. **Memory Limits:** Extremely large repositories might cause memory strain due to in-memory batch accumulation before the Postgres upsert.
 
-## Evaluation Metrics
+## Retrieval Architecture (Phase 1)
 
-**Week 2 baseline — no reranking yet.**
-*(Note: Numbers are drafted pending final ingestion and dataset population)*
+Our pipeline currently executes a two-stage retrieval process designed to capture both semantic meaning and exact keyword matches before reranking them for precision:
+
+```mermaid
+graph TD
+    Q["User Query"] --> D["Dense Retrieval (Jina v3 Embeddings)"]
+    Q --> S["Sparse Retrieval (Postgres BM25)"]
+    
+    D --> RRF["Reciprocal Rank Fusion (k=60)"]
+    S --> RRF
+    
+    RRF --> CE["Cross-Encoder Reranker (ms-marco-MiniLM)"]
+    CE --> Final["Top-K Ranked Chunks"]
+```
+
+## Phase 1 Evaluation Summary
+
+After benchmarking our pipeline against a 100-question synthetic evaluation set (targeting the `scikit-learn` codebase), we identified critical bottlenecks in our retrieval architecture:
 
 | Method | Recall@5 | Recall@10 | MRR (Top 10) |
 | :--- | :--- | :--- | :--- |
-| **BM25 (Lexical)** | 62.0% | 68.0% | 0.4512 |
-| **Dense (Semantic)** | 74.0% | 82.0% | 0.5890 |
-| **Naive-Hybrid (RRF)** | **86.0%** | **94.0%** | **0.7104** |
+| **BM25 (Lexical)** | 0.0% | 0.0% | 0.0000 |
+| **Dense (Semantic)** | 37.0% | 44.0% | 0.2742 |
+| **Naive-Hybrid (RRF)** | 37.0% | 44.0% | 0.2742 |
+| **Reranked Hybrid** | 36.0% | 43.0% | 0.2549 |
+
+### Architectural Takeaways
+
+1. **The Sparse Retrieval Failure:** BM25 flatlined at 0% recall. The root cause is that PostgreSQL's `to_tsvector('english')` text parser strips out Python syntax, punctuation, and camelCase boundaries, completely neutering our lexical keyword matching.
+2. **The Illusion of Hybrid:** Because BM25 provided exactly zero retrieval signal, our Reciprocal Rank Fusion (RRF) implementation merely fell back to mathematically re-sorting the exact same candidates returned by the Dense layer. 
+3. **The Reranker Penalty:** Adding a cross-encoder actually *degraded* performance (Recall@10 dropped from 44.0% to 43.0%). The generic `ms-marco` cross-encoder, trained entirely on natural language NLP tasks, actively penalizes Python code chunks when estimating query-document relevance.
+
+### Phase 2 Action Items
+- **Fix BM25:** Implement a custom code-aware tokenization strategy (or a specialized sparse vector model like SPLADE) to rescue exact-match retrieval.
+- **Swap the Reranker:** Replace the generic `ms-marco` model with a domain-adapted code reranker (e.g., `jina-reranker-v1-code`).
+- **Fix Eval Leakage:** Re-generate the 100-question eval set with an LLM to prevent synthetic templating biases from inflating our scores.

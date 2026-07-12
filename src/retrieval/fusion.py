@@ -1,4 +1,5 @@
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 
 def reciprocal_rank_fusion(
     dense_results: List[Dict[str, Any]], 
@@ -21,9 +22,29 @@ def reciprocal_rank_fusion(
     Returns:
         List of fused chunk dictionaries sorted by RRF score descending.
     """
-    # TODO: Implement in-memory rank extraction and mapping logic
-    # STUB: Return an empty list for now
-    return []
+    fused_scores: Dict[str, float] = {}
+    combined_docs: Dict[str, Dict[str, Any]] = {}
+    
+    for rank, doc in enumerate(dense_results, 1):
+        doc_id = doc["id"]
+        fused_scores[doc_id] = fused_scores.get(doc_id, 0.0) + 1.0 / (k + rank)
+        combined_docs[doc_id] = doc
+        
+    for rank, doc in enumerate(bm25_results, 1):
+        doc_id = doc["id"]
+        fused_scores[doc_id] = fused_scores.get(doc_id, 0.0) + 1.0 / (k + rank)
+        if doc_id not in combined_docs:
+            combined_docs[doc_id] = doc
+            
+    sorted_items = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)
+    
+    fused_results = []
+    for doc_id, score in sorted_items[:top_n]:
+        fused_doc = combined_docs[doc_id].copy()
+        fused_doc["rrf_score"] = score
+        fused_results.append(fused_doc)
+        
+    return fused_results
 
 
 def weighted_score_fusion(

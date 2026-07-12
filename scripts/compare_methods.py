@@ -23,6 +23,9 @@ logger = logging.getLogger("compare_methods")
 
 
 def evaluate_method(examples, conn, table_name, method, verbose=False):
+    # Warm-up call to prevent model loading time (e.g., cross-encoder init) from skewing latency metrics
+    _ = retrieve_chunks(conn, table_name, "dummy warm up query", method=method, k=1)
+    
     results_k5 = []
     results_k10 = []
     latencies = []

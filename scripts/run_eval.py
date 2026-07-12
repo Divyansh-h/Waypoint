@@ -49,179 +49,29 @@ def get_db_connection(conn_str):
         sys.exit(1)
 
 
-def _retrieve_dense(conn, table_name: str, query: str, k: int) -> List[str]:
-    try:
-        embeddings = get_jina_embeddings([query])
-        if not embeddings:
-            return []
-        query_vector = embeddings[0]
-        
-        with conn.cursor() as cur:
-            cur.execute(
-                f"SELECT id FROM {table_name} ORDER BY embedding <=> %s::vector LIMIT %s",
-                (query_vector, k)
-            )
-            return [row[0] for row in cur.fetchall()]
-    except Exception as e:
-        logger.error(f"Dense retrieval failed: {e}")
-        conn.rollback()
-        return []
-
-def _retrieve_bm25(conn, table_name: str, query: str, k: int) -> List[str]:
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                SELECT id FROM {table_name}
-                WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s)
-                ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', %s)) DESC
-                LIMIT %s
-                """,
-                (query, query, k)
-            )
-            return [row[0] for row in cur.fetchall()]
-    except Exception as e:
-        logger.error(f"BM25 retrieval failed: {e}")
-        conn.rollback()
-        return []
-
-def _retrieve_hybrid(conn, table_name: str, query: str, k: int) -> List[str]:
-    try:
-        embeddings = get_jina_embeddings([query])
-        if not embeddings:
-            return []
-        query_vector = embeddings[0]
-        
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                WITH semantic_search AS (
-                    SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> %s::vector) as rank 
-                    FROM {table_name} 
-                    LIMIT %s
-                ), keyword_search AS (
-                    SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', %s)) DESC) as rank
-                    FROM {table_name} 
-                    WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s) 
-                    LIMIT %s
-                )
-                SELECT COALESCE(s.id, k.id) as id, 
-                       s.rank as dense_rank, 
-                       k.rank as bm25_rank,
-                       COALESCE(1.0 / (60 + s.rank), 0.0) + COALESCE(1.0 / (60 + k.rank), 0.0) as rrf_score
-                FROM semantic_search s FULL OUTER JOIN keyword_search k ON s.id = k.id
-                ORDER BY rrf_score DESC 
-                LIMIT %s;
-                """,
-                (query_vector, k, query, query, k, k)
-            )
-            
-            results = cur.fetchall()
-            logger.debug("Hybrid Search Ranks:")
-            for r in results:
-                logger.debug(f"ID: {r[0]}, Dense Rank: {r[1]}, BM25 Rank: {r[2]}, RRF Score: {r[3]:.4f}")
-                
-            return [row[0] for row in results]
-    except Exception as e:
-        logger.error(f"Hybrid retrieval failed: {e}")
-        conn.rollback()
-        return []
-
-def _retrieve_reranked_hybrid(conn, table_name: str, query: str, k: int) -> List[str]:
-    """
-    Two-stage retrieval: Uses Hybrid RRF to pull a larger candidate pool (Top-30),
-    then passes them to a Cross-Encoder for precise reranking down to Top-K.
-    """
-    try:
-        import yaml
-        with open("configs/ingestion.yaml", "r") as f:
-            config = yaml.safe_load(f)
-        retrieval_cfg = config.get("retrieval", {})
-        
-        global GLOBAL_POOL_SIZE_OVERRIDE
-        if GLOBAL_POOL_SIZE_OVERRIDE is not None:
-            pool_size = GLOBAL_POOL_SIZE_OVERRIDE
-        else:
-            pool_size = retrieval_cfg.get("candidate_pool_size", 30)
-            
-        model_name = retrieval_cfg.get("reranker_model", "stub")
-        cache_dir = retrieval_cfg.get("model_cache_dir", ".models_cache")
-        
-        from retrieval.reranker import get_reranker
-        reranker = get_reranker(model_name, cache_dir)
-    except ImportError:
-        logger.error("Failed to import Reranker. Check your python path.")
-        return []
-    except Exception as e:
-        logger.error(f"Failed to load retrieval config: {e}")
-        pool_size = 30
-        
-    try:
-        embeddings = get_jina_embeddings([query])
-        if not embeddings:
-            return []
-        query_vector = embeddings[0]
-        
-        with conn.cursor() as cur:
-            # We must select 'content' so the cross-encoder has text to evaluate
-            cur.execute(
-                f"""
-                WITH semantic_search AS (
-                    SELECT id, content, ROW_NUMBER() OVER (ORDER BY embedding <=> %s::vector) as rank 
-                    FROM {table_name} 
-                    LIMIT %s
-                ), keyword_search AS (
-                    SELECT id, content, ROW_NUMBER() OVER (ORDER BY ts_rank(to_tsvector('english', content), plainto_tsquery('english', %s)) DESC) as rank
-                    FROM {table_name} 
-                    WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s) 
-                    LIMIT %s
-                )
-                SELECT COALESCE(s.id, k.id) as id,
-                       COALESCE(s.content, k.content) as content,
-                       s.rank as dense_rank, 
-                       k.rank as bm25_rank,
-                       COALESCE(1.0 / (60 + s.rank), 0.0) + COALESCE(1.0 / (60 + k.rank), 0.0) as rrf_score
-                FROM semantic_search s FULL OUTER JOIN keyword_search k ON s.id = k.id
-                ORDER BY rrf_score DESC 
-                LIMIT %s;
-                """,
-                (query_vector, pool_size, query, query, pool_size, pool_size)
-            )
-            
-            results = cur.fetchall()
-            
-            # Map database rows to dictionaries for the reranker
-            candidates = [{"id": r[0], "content": r[1], "rrf_score": r[4]} for r in results]
-            
-            # Stage 2: Rerank
-            ranked_candidates = reranker.rerank(query, candidates)
-            
-            # Return final top-K IDs
-            return [c["id"] for c in ranked_candidates[:k]]
-            
-    except Exception as e:
-        logger.error(f"Reranked Hybrid retrieval failed: {e}")
-        conn.rollback()
-        return []
-
-
-# Registry for easy plug-and-play of future retrieval presets
 RETRIEVAL_METHODS = {
-    "dense": _retrieve_dense,
-    "bm25": _retrieve_bm25,
-    "hybrid": _retrieve_hybrid,
-    "reranked_hybrid": _retrieve_reranked_hybrid,
+    "dense": None,
+    "bm25": None,
+    "hybrid": None,
+    "reranked_hybrid": None,
 }
+
+_pipeline = None
 
 def retrieve_chunks(conn, table_name: str, query: str, method: str, k: int = 10) -> List[str]:
     """
-    Retrieves top-K chunk IDs using the requested preset.
+    Retrieves top-K chunk IDs using the requested preset via RetrievalPipeline.
     """
-    if method not in RETRIEVAL_METHODS:
-        logger.error(f"Unknown retrieval method: {method}")
-        return []
+    global _pipeline
+    if _pipeline is None:
+        from retrieval.pipeline import RetrievalPipeline
+        global GLOBAL_POOL_SIZE_OVERRIDE, GLOBAL_RRF_K_OVERRIDE
+        pool_size = GLOBAL_POOL_SIZE_OVERRIDE if 'GLOBAL_POOL_SIZE_OVERRIDE' in globals() else None
+        rrf_k = GLOBAL_RRF_K_OVERRIDE if 'GLOBAL_RRF_K_OVERRIDE' in globals() else None
         
-    return RETRIEVAL_METHODS[method](conn, table_name, query, k)
+        _pipeline = RetrievalPipeline(conn, table_name, rrf_k_override=rrf_k, pool_size_override=pool_size)
+        
+    return _pipeline.retrieve(query, method, k)
 
 
 def evaluate_example(example: EvalExample, retrieved_chunks: List[str]) -> dict:
@@ -277,7 +127,12 @@ def main():
     parser.add_argument("--method", type=str, choices=list(RETRIEVAL_METHODS.keys()), default="dense", 
                         help="The retrieval strategy to evaluate.")
     parser.add_argument("--out-dir", type=str, default="results/week3", help="Directory to save the run JSON")
+    parser.add_argument("--rrf-k", type=int, default=None, help="Override the k parameter for Reciprocal Rank Fusion")
     args = parser.parse_args()
+    
+    if args.rrf_k is not None:
+        global GLOBAL_RRF_K_OVERRIDE
+        GLOBAL_RRF_K_OVERRIDE = args.rrf_k
 
     eval_file_path = Path(args.eval_file)
     try:
