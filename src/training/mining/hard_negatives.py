@@ -1,8 +1,9 @@
-import json
 from typing import List
-from training.schema import TrainingPair, PositiveChunk
 
 import psycopg2
+
+from training.schema import TrainingPair
+
 
 def mine_embedding_neighbors(query: str, true_positive_id: str, k: int = 20) -> List[str]:
     """

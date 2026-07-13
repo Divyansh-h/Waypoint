@@ -1,8 +1,10 @@
-import numpy as np
 from typing import List
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+
+from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
+from sklearn.metrics.pairwise import cosine_similarity  # type: ignore
+
 from training.schema import TrainingPair
+
 
 def filter_training_pairs(
     pairs: List[TrainingPair], 
@@ -13,7 +15,8 @@ def filter_training_pairs(
     Applies the Phase 1 filtering checklist to the synthetic training dataset:
     1. Drops questions that are too short (under min_words).
     2. Drops near-duplicate questions using TF-IDF cosine similarity.
-    3. Flags questions where the LLM's concept heavily hallucinates or doesn't match the source chunk.
+    3. Flags questions where the LLM's concept heavily hallucinates
+       or doesn't match the source chunk.
     
     Args:
         pairs: The list of raw synthetic TrainingPairs.
@@ -26,18 +29,34 @@ def filter_training_pairs(
     if not pairs:
         return []
         
+    import json
+    import os
+    os.makedirs("data/training", exist_ok=True)
+    
+    dropped_log = []
+    
     # 1. Length Filter (Drop questions under N words)
     length_filtered = []
     for pair in pairs:
         word_count = len(pair.anchor.split())
         if word_count >= min_words:
             length_filtered.append(pair)
+        else:
+            dropped_log.append({
+                "reason": "TOO_SHORT",
+                "anchor": pair.anchor,
+                "source": pair.source
+            })
             
     if not length_filtered:
+        if dropped_log:
+            with open("data/training/dropped_pairs.jsonl", "w") as f:
+                for d in dropped_log:
+                    f.write(json.dumps(d) + "\
+")
         return []
         
     # 2. Near-Duplicate Filter (Embedding Similarity)
-    # Using TF-IDF as an ultra-fast, local heuristic for exact/near-exact question overlap
     anchors = [p.anchor for p in length_filtered]
     
     try:
@@ -45,25 +64,38 @@ def filter_training_pairs(
         tfidf_matrix = vectorizer.fit_transform(anchors)
         cosine_sim_matrix = cosine_similarity(tfidf_matrix)
     except ValueError:
-        # Fallback if vocabulary is entirely empty (e.g. all stop words)
         return length_filtered
 
-    # Identify duplicates
     drop_indices = set()
     for i in range(len(anchors)):
         if i in drop_indices:
             continue
-        # Compare current question with all subsequent questions
         for j in range(i + 1, len(anchors)):
             if cosine_sim_matrix[i, j] > max_similarity:
-                drop_indices.add(j) # Mark the duplicate for deletion
+                drop_indices.add(j) 
                 
-    deduped_pairs = [pair for i, pair in enumerate(length_filtered) if i not in drop_indices]
+    deduped_pairs = []
+    for i, pair in enumerate(length_filtered):
+        if i not in drop_indices:
+            deduped_pairs.append(pair)
+        else:
+            dropped_log.append({
+                "reason": "NEAR_DUPLICATE",
+                "anchor": pair.anchor,
+                "source": pair.source
+            })
+            
+    if dropped_log:
+        with open("data/training/dropped_pairs.jsonl", "w") as f:
+            for d in dropped_log:
+                f.write(json.dumps(d) + "\
+")
     
     # 3. Relevance Flagging (LLM cited answer vs source chunk)
     filtered_pairs = []
     for pair in deduped_pairs:
-        # Check if the LLM's "core_concept" actually shares any semantic/lexical overlap with the code chunk
+        # Check if the LLM's "core_concept" actually shares any
+        # semantic/lexical overlap with the code chunk
         concept = pair.metadata.get("core_concept", "").lower()
         chunk_text = pair.positive.content.lower()
         

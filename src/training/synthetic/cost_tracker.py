@@ -5,7 +5,7 @@ class CostTracker:
     """
     PRICING = {
         "gemini-1.5-flash": {"input": 0.35, "output": 1.05}, 
-        "gemini-2.5-flash": {"input": 0.35, "output": 1.05}, # Assuming same pricing as 1.5 for scaffolding
+        "gemini-2.5-flash": {"input": 0.35, "output": 1.05},  # Assume same as 1.5
         "gpt-4o-mini": {"input": 0.150, "output": 0.600},
         "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25}
     }
@@ -16,7 +16,7 @@ class CostTracker:
         self.total_output_tokens = 0
         self.pricing = self.PRICING.get(model_name, {"input": 0.0, "output": 0.0})
 
-    def add_usage(self, input_tokens: int, output_tokens: int):
+    def add_usage(self, input_tokens: int, output_tokens: int) -> None:
         self.total_input_tokens += input_tokens
         self.total_output_tokens += output_tokens
 

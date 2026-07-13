@@ -1,6 +1,7 @@
 import ast
-from typing import List, Dict, Any
-from training.schema import TrainingPair, PositiveChunk
+from typing import Any, Dict, List
+
+from training.schema import PositiveChunk, TrainingPair
 
 # Note: Update this type hint to use your actual Chunk dataclass/schema once integrated
 Chunk = Dict[str, Any]
@@ -52,7 +53,8 @@ def mine_docstring_pairs(chunks: List[Chunk]) -> List[TrainingPair]:
         lines = docstring.strip().splitlines()
         summary = lines[0].strip() if lines else docstring
         
-        # 3. Strip the docstring from the raw code to use the remaining implementation as 'positive'.
+        # 3. Strip the docstring from the raw code to use the remaining
+        # implementation as 'positive'.
         # We use the AST node line numbers to safely slice it out while preserving comments.
         positive_content = content
         if node.body and isinstance(node.body[0], ast.Expr):
@@ -63,7 +65,9 @@ def mine_docstring_pairs(chunks: List[Chunk]) -> List[TrainingPair]:
                 
                 content_lines = content.splitlines()
                 # Slice out the exact lines containing the docstring
-                positive_content = "\\n".join(content_lines[:start_lineno] + content_lines[end_lineno:])
+                positive_content = "\n".join(
+                    content_lines[:start_lineno] + content_lines[end_lineno:]
+                )
         
         pairs.append(
             TrainingPair(

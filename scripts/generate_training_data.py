@@ -11,8 +11,12 @@ from training.synthetic.generate_qa import generate_question_from_chunk
 from training.synthetic.cost_tracker import CostTracker
 from training.mining.hard_negatives import mine_embedding_neighbors, mine_from_failure_log
 from training.filtering.quality import filter_training_pairs
+from training.schema import TrainingPair, PositiveChunk
 from dotenv import load_dotenv
 import time
+import json
+import random
+from collections import defaultdict
 
 def main():
     load_dotenv()
@@ -71,29 +75,71 @@ def main():
     os.makedirs("data/training/synthetic", exist_ok=True)
     raw_output_path = "data/training/synthetic/raw_questions.jsonl"
     
-    import json
-    
-    with open(raw_output_path, 'w', encoding='utf-8') as out_f:
-        # We generate synthetic questions based on the stripped implementation chunks
+    completed_chunks = {}
+    if os.path.exists(raw_output_path):
+        with open(raw_output_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        data = json.loads(line)
+                        if "chunk_id" in data:
+                            completed_chunks[data["chunk_id"]] = data
+                    except:
+                        pass
+        if completed_chunks:
+            print(f"   -> Resuming... Found {len(completed_chunks)} previously generated synthetic questions.")
+            
+    file_mode = 'a' if completed_chunks else 'w'
+    with open(raw_output_path, file_mode, encoding='utf-8') as out_f:
         for pair in sample_pairs:
-            # We mock the chunk dict since the generator expects it
+            chunk_id = pair.positive.chunk_id
+            
+            # Checkpoint resumption
+            if chunk_id in completed_chunks:
+                data = completed_chunks[chunk_id]
+                usage = data.get("usage", {})
+                syn_pair = TrainingPair(
+                    anchor=data["generated_question"],
+                    positive=PositiveChunk(
+                        chunk_id=chunk_id,
+                        content=pair.positive.content,
+                        file_path=pair.positive.file_path
+                    ),
+                    negatives=[],
+                    source="synthetic",
+                    metadata={
+                        "prompt_template": prompt_template,
+                        "llm_model": llm_model,
+                        "core_concept": data.get("core_concept", ""),
+                        "usage": usage
+                    }
+                )
+                synthetic_pairs.append(syn_pair)
+                cost_tracker.add_usage(usage.get("input_tokens", 0), usage.get("output_tokens", 0))
+                continue
+
+            # API Generation for new chunks
             chunk = {
-                "chunk_id": pair.positive.chunk_id, 
+                "chunk_id": chunk_id, 
                 "content": pair.positive.content,
                 "file_path": pair.positive.file_path
             }
             syn_pair = generate_question_from_chunk(chunk, prompt_template)
+            
+            if syn_pair is None:
+                continue
+                
             synthetic_pairs.append(syn_pair)
             
             usage = syn_pair.metadata.get("usage", {})
             cost_tracker.add_usage(usage.get("input_tokens", 0), usage.get("output_tokens", 0))
             
-            # Save raw output with chunk ID
+            # Save raw output
             out_f.write(json.dumps({
-                "chunk_id": pair.positive.chunk_id,
+                "chunk_id": chunk_id,
                 "generated_question": syn_pair.anchor,
                 "core_concept": syn_pair.metadata.get("core_concept", ""),
-                "llm_model": llm_model
+                "usage": usage
             }) + "\n")
             out_f.flush()
             
@@ -141,22 +187,48 @@ def main():
     print(f"   -> {len(filtered_pairs)} pristine pairs remain.\n")
 
     # ---------------------------------------------------------
+    # 4.5. Stratified Oversampling (Balancing the Dataset)
+    # ---------------------------------------------------------
+    print("\nSTEP 4.5: Balancing dataset via Stratified Oversampling...")
+    source_buckets = defaultdict(list)
+    for p in filtered_pairs:
+        source_buckets[p.source].append(p)
+        
+    for src, items in source_buckets.items():
+        print(f"   -> {src}: {len(items)} pristine pairs.")
+        
+    balanced_pairs = []
+    target_size = 1000
+    ratios = {
+        "mined": 0.70,
+        "synthetic": 0.30,
+        "failure": 0.30
+    }
+    
+    for src, items in source_buckets.items():
+        if not items: continue
+        target_count = int(target_size * ratios.get(src, 0.5))
+        
+        if len(items) < target_count:
+            sampled = items + random.choices(items, k=(target_count - len(items)))
+        else:
+            sampled = random.sample(items, target_count)
+            
+        balanced_pairs.extend(sampled)
+        print(f"   -> Oversampled/Downsampled '{src}' to {len(sampled)} pairs.")
+
+    # ---------------------------------------------------------
     # 5. Stratified Train/Val Split (File-Level Isolation)
     # ---------------------------------------------------------
-    print("STEP 5: Splitting into train/val sets (Module-level isolation)...")
-    
-    import random
-    from collections import defaultdict
+    print("\nSTEP 5: Splitting into train/val sets (Module-level isolation)...")
     
     # Group pairs by their source file to prevent data leakage
     file_to_pairs = defaultdict(list)
-    for pair in filtered_pairs:
-        # Default to "unknown" if file_path is missing (e.g. from failure logs stub)
+    for pair in balanced_pairs:
         fpath = pair.positive.file_path or "unknown"
         file_to_pairs[fpath].append(pair)
         
     unique_files = list(file_to_pairs.keys())
-    # Sort for deterministic shuffling (with seed)
     unique_files.sort()
     random.seed(42)
     random.shuffle(unique_files)
@@ -167,11 +239,11 @@ def main():
     
     train_pairs = []
     val_pairs = []
-    for fpath, pairs in file_to_pairs.items():
-        if fpath in train_files:
-            train_pairs.extend(pairs)
+    for pair in balanced_pairs:
+        if pair.positive.file_path in val_files:
+            val_pairs.append(pair)
         else:
-            val_pairs.extend(pairs)
+            train_pairs.append(pair)
             
     os.makedirs("data/training/train", exist_ok=True)
     os.makedirs("data/training/val", exist_ok=True)
@@ -185,7 +257,7 @@ def main():
             out_f.write(pair.model_dump_json() + "\n")
             
     print(f"   -> Training set: {len(train_pairs)} pairs across {len(train_files)} files (Saved to data/training/train/train.jsonl)")
-    print(f"   -> Validation set: {len(val_pairs)} pairs across {len(val_files)} files (Saved to data/training/val/val.jsonl)\\n")
+    print(f"   -> Validation set: {len(val_pairs)} pairs across {len(val_files)} files (Saved to data/training/val/val.jsonl)\n")
     
     print("✅ Pipeline orchestration complete. Ready for Sentence-Transformers MNRL fine-tuning!")
 
