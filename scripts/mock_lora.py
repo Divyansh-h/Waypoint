@@ -10,7 +10,7 @@ lora_config = LoraConfig(
     target_modules=["query", "value"], 
     bias="none"
 )
-peft_model = get_peft_model(model[0].auto_model, lora_config)
+peft_model = get_peft_model(model[0].auto_model, lora_config)  # type: ignore
 
 # Manually initialize lora_B to be non-zero so that the embeddings diverge in the sanity test
 for name, param in peft_model.named_parameters():
