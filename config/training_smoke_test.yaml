@@ -1,0 +1,21 @@
+# config/training_smoke_test.yaml
+# Use this config to verify the training loop runs end-to-end before a real run.
+
+# Experiment Tracking
+wandb_project: "waypoint-retriever-finetune"
+
+# Dataset Subsetting (To run instantly for testing)
+max_train_samples: 50
+max_val_samples: 10
+
+# Hyperparameters (Optimized for a fast smoke test)
+epochs: 2
+batch_size: 8
+learning_rate: 2.0e-4
+
+# LoRA Configuration
+lora_rank: 8
+lora_alpha: 16
+target_modules: 
+  - "query"
+  - "value"
