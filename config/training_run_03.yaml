@@ -1,0 +1,14 @@
+wandb_project: "waypoint-retriever-finetune"
+
+# Hyperparameters (Second Config)
+# Learning Rate lowered by an order of magnitude to prevent overshooting minima
+epochs: 4
+batch_size: 64
+learning_rate: 5.0e-5
+
+# LoRA Configuration
+lora_rank: 32
+lora_alpha: 64
+target_modules: 
+  - "query"
+  - "value"

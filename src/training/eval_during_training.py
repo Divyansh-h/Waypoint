@@ -1,11 +1,14 @@
 import json
 import logging
-from typing import Dict
+from typing import Dict, Set
+
 from sentence_transformers.evaluation import InformationRetrievalEvaluator
 
 logger = logging.getLogger(__name__)
 
-def create_ir_evaluator(val_dataset_path: str, name: str = "val_eval") -> InformationRetrievalEvaluator:
+def create_ir_evaluator(
+    val_dataset_path: str, name: str = "val_eval"
+) -> InformationRetrievalEvaluator:
     """
     Parses the validation JSONL dataset and constructs an InformationRetrievalEvaluator.
     This evaluator calculates strict retrieval metrics (Recall@k, MRR@k, NDCG@k) 
@@ -16,7 +19,7 @@ def create_ir_evaluator(val_dataset_path: str, name: str = "val_eval") -> Inform
     """
     queries: Dict[str, str] = {}
     corpus: Dict[str, str] = {}
-    relevant_docs: Dict[str, set] = {}
+    relevant_docs: Dict[str, Set[str]] = {}
     
     logger.info(f"Loading validation dataset for evaluation from: {val_dataset_path}")
     

@@ -1,0 +1,13 @@
+wandb_project: "waypoint-retriever-finetune"
+
+# Hyperparameters (Optimized based on our discussions)
+epochs: 3
+batch_size: 32
+learning_rate: 2.0e-4
+
+# LoRA Configuration
+lora_rank: 16
+lora_alpha: 32
+target_modules: 
+  - "query"
+  - "value"
