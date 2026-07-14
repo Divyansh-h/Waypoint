@@ -1,4 +1,4 @@
-from typing import List, Set
+from typing import Any, Dict, List, Set
 
 
 def recall_at_k(retrieved: List[str], relevant: Set[str], k: int) -> float:
@@ -78,7 +78,7 @@ def mrr(retrieved: List[str], relevant: Set[str]) -> float:
     return 0.0
 
 
-def cluster_failures(misses: List[dict]) -> tuple[dict, dict]:
+def cluster_failures(misses: List[Dict[str, Any]]) -> tuple[Dict[str, int], Dict[str, int]]:
     """
     Groups missed questions by difficulty and question type to identify systemic weaknesses.
     
@@ -88,8 +88,8 @@ def cluster_failures(misses: List[dict]) -> tuple[dict, dict]:
     Returns:
         tuple: (difficulty_counts, type_counts) dictionaries
     """
-    diff_counts = {}
-    type_counts = {}
+    diff_counts: Dict[str, int] = {}
+    type_counts: Dict[str, int] = {}
     
     for m in misses:
         diff = m.get("difficulty", "UNKNOWN").upper()

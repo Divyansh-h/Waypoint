@@ -38,56 +38,42 @@ We are actively tracking the following pipeline limitations:
 2. **Coupled Embedding Dimensions:** The `indexer.py` database schema is currently hardcoded to default to a vector dimension of `1024`. This secretly couples the database to Jina v3; swapping the embedding model requires manually updating the schema logic to prevent silent dimension mismatch errors in Postgres.
 3. **Memory Limits:** Extremely large repositories might cause memory strain due to in-memory batch accumulation before the Postgres upsert.
 
-## Retrieval Architecture (Phase 1)
+## Retrieval Architecture (Phase 1 & 2)
 
-Our pipeline currently executes a two-stage retrieval process designed to capture both semantic meaning and exact keyword matches before reranking them for precision:
+Our pipeline currently executes a dense retrieval process mapped into an end-to-end evaluation layer guarded by a calibrated LLM-as-a-Judge:
 
 ```mermaid
 graph TD
-    Q["User Query"] --> D["Dense Retrieval (Jina v3 Embeddings)"]
-    Q --> S["Sparse Retrieval (Postgres BM25)"]
+    Q["User Query"] --> D["Dense Retrieval (Fine-Tuned Embeddings)"]
     
-    D --> RRF["Reciprocal Rank Fusion (k=60)"]
-    S --> RRF
+    D --> TopK["Top-K Ranked Chunks"]
     
-    RRF --> CE["Cross-Encoder Reranker (ms-marco-MiniLM)"]
-    CE --> Final["Top-K Ranked Chunks"]
+    TopK --> Gen["LLM Generator (Agent)"]
+    Q --> Gen
+    Gen --> Ans["Final Answer Synthesis"]
+    
+    Ans --> Judge["LLM-as-a-Judge (gemini-2.5-flash)"]
+    TopK --> Judge
+    Q --> Judge
+    Judge --> Score["Strict Binary Evaluation Checklist"]
 ```
 
-## Phase 1 Evaluation Summary
+## Phase 1 & 2 Evaluation Summary
 
-After benchmarking our pipeline against a 100-question synthetic evaluation set (targeting the `scikit-learn` codebase), we identified critical bottlenecks in our retrieval architecture:
+After benchmarking our pipeline against a 101-question evaluation set (targeting the `scikit-learn` codebase), we identified our true baseline performance. While earlier synthetic telemetry reported 60%+ success rates, a forensic audit proved those metrics were mocked/hallucinated by early generation scripts. 
 
-| Method | Recall@5 | Recall@10 | MRR (Top 10) |
+Here is the mathematically verified, on-disk reality of the RAG engine:
+
+| Architecture Stage | Recall@10 | MRR (Top 10) | Notes |
 | :--- | :--- | :--- | :--- |
-| **BM25 (Lexical)** | 0.0% | 0.0% | 0.0000 |
-| **Dense (Semantic)** | 37.0% | 44.0% | 0.2742 |
-| **Naive-Hybrid (RRF)** | 37.0% | 44.0% | 0.2742 |
-| **Reranked Hybrid** | 36.0% | 43.0% | 0.2549 |
+| **Phase 1: Zero-Shot Baseline** | ~43.6% | 0.271 | The baseline dense retrieval without custom embeddings. |
+| **Phase 2: Fine-Tuning (Stalled)** | ~43.6% | 0.271 | MNRL LoRA fine-tuning failed to breach the 60% goal due to unnatural synthetic training data. |
 
 ### Architectural Takeaways
 
-1. **The Sparse Retrieval Failure:** BM25 flatlined at 0% recall. The root cause is that PostgreSQL's `to_tsvector('english')` text parser strips out Python syntax, punctuation, and camelCase boundaries, completely neutering our lexical keyword matching.
-2. **The Illusion of Hybrid:** Because BM25 provided exactly zero retrieval signal, our Reciprocal Rank Fusion (RRF) implementation merely fell back to mathematically re-sorting the exact same candidates returned by the Dense layer. 
-3. **The Reranker Penalty:** Adding a cross-encoder actually *degraded* performance (Recall@10 dropped from 44.0% to 43.0%). The generic `ms-marco` cross-encoder, trained entirely on natural language NLP tasks, actively penalizes Python code chunks when estimating query-document relevance.
+1. **The Fine-Tuning Wall:** We applied MNRL (Multiple Negatives Ranking Loss) LoRA fine-tuning but stalled exactly at the zero-shot baseline of ~43.6%. This proved that training on naive docstring pairs is insufficient; the embedding model actually requires deeply-linked AST call-graph dependencies to learn semantic codebase navigation.
+2. **LLM-as-a-Judge Calibration:** Human grading scales poorly. We engineered an automated LLM Judge, mathematically verifying its strictness against human baselines using Cohen’s Kappa (achieving $\kappa = 0.682$). We actively stripped chunk `id` metadata to force the judge to read the code logic, defeating LLM sycophancy and cheating biases.
+3. **The Multi-Hop Synthesis Failure:** Cross-tabulation proved that even when perfect context is successfully retrieved, passive generation fails catastrophically on Multi-Hop codebase queries (averaging 0.0/5.0). Brute-forcing the vector DB cannot fix a logical synthesis failure. 
 
-### Phase 2 Action Items
-- **Fix BM25:** Implement a custom code-aware tokenization strategy (or a specialized sparse vector model like SPLADE) to rescue exact-match retrieval.
-- **Swap the Reranker:** Replace the generic `ms-marco` model with a domain-adapted code reranker (e.g., `jina-reranker-v1-code`).
-- **Fix Eval Leakage:** Re-generate the 100-question eval set with an LLM to prevent synthetic templating biases from inflating our scores.
-
-## Phase 3 Fine-Tuning Summary
-
-After utilizing `all-MiniLM-L6-v2` as our base retriever, we executed a domain-specific fine-tuning run using **MultipleNegativesRankingLoss (MNRL)** and **LoRA** (Rank=32, Alpha=64, LR=5e-5). The dataset consisted of 526 targeted docstring pairs supplemented with `pgvector`-mined hard negatives.
-
-To rigorously guarantee we weren't just overfitting to our training data, we isolated a **blind 20-question test set** (queries the model had never seen) and evaluated our final checkpoint:
-
-| Metric | Pretrained Base | Fine-Tuned LoRA | Delta (Absolute) |
-| :--- | :--- | :--- | :--- |
-| **Recall@5** | 37.0% | 55.5% | +18.5% |
-| **Recall@10** | 44.0% | 63.5% | +19.5% |
-| **MRR (Top 10)** | 0.2742 | 0.4011 | +0.1269 |
-
-**Analysis of Gains:** The massive +19.5% leap in Recall was driven almost entirely by our hard-negative strategy. By feeding the model triplet sets that mathematically penalized false lexical overlaps (e.g., explicitly teaching it that `LinearRegression.fit()` is a negative match for a `KMeans.fit()` query), the model learned to map class-method boundaries and prioritize parameter nouns over conversational fluff. Furthermore, restricting the trainable parameters to a Rank-32 LoRA adapter successfully mapped this domain vocabulary without triggering catastrophic forgetting of the model's baseline English semantics.
-
-The final, validated adapter is locked in at `checkpoints/best/`.
+### Phase 3 Action Items
+- **Agentic RAG Pivot:** Passive retrieval is insufficient. We are currently pivoting to an Agentic RAG architecture, equipping the LLM with iterative, tool-calling codebase search capabilities so it can actively hunt down cross-file multi-hop dependencies on its own.

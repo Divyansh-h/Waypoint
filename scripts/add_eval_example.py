@@ -15,7 +15,7 @@ if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
 from ingestion.embed import get_jina_embeddings
-from ingestion.models import EvalExample, GroundTruth
+from ingestion.models import EvalExample
 
 
 def load_db_config(config_path="configs/ingestion.yaml"):
@@ -160,15 +160,15 @@ def main():
                     diff = input("Difficulty [easy/medium/hard/adversarial]: ").strip().lower()
                     
                 qtype = ""
-                while qtype not in ["factual", "debugging", "conceptual", "api_usage", "out_of_scope"]:
-                    qtype = input("Type [factual/debugging/conceptual/api_usage/out_of_scope]: ").strip().lower()
+                while qtype not in ["factual", "debugging", "conceptual", "api_usage", "out_of_scope", "multi_hop"]:
+                    qtype = input("Type [factual/debugging/conceptual/api_usage/out_of_scope/multi_hop]: ").strip().lower()
 
                 # 6. Build and save Example
                 # Storing as a single path for now. To add multiple OR paths, you could edit the JSONL manually later.
                 example = EvalExample(
                     id=f"eval_{uuid.uuid4().hex[:8]}",
                     question=question,
-                    ground_truth=GroundTruth(acceptable_paths=[selected_ids]),
+                    ground_truth_chunk_ids=selected_ids,
                     difficulty_tag=diff,
                     question_type=qtype
                 )

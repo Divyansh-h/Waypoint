@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -20,7 +21,14 @@ if str(src_dir) not in sys.path:
 
 from eval.loader import load_eval_set
 from ingestion.models import EvalExample
+from eval.judge import score_answer, JudgeScore
 from ingestion.embed import get_jina_embeddings
+import os
+import google.generativeai as genai
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("run_eval")
@@ -82,33 +90,25 @@ def evaluate_example(example: EvalExample, retrieved_chunks: List[str]) -> dict:
     best_rank = float('inf')
     is_hit = False
 
-    # Check each acceptable path (Logical OR)
-    for path in example.ground_truth.acceptable_paths:
-        # Check if ALL chunks in this path were retrieved (Logical AND / Multi-hop)
-        path_ranks = []
-        path_satisfied = True
-        
-        for required_chunk_id in path:
-            if required_chunk_id in retrieved_chunks:
-                # 1-indexed rank
-                rank = retrieved_chunks.index(required_chunk_id) + 1
-                path_ranks.append(rank)
-            else:
-                path_satisfied = False
-                break
-                
-        if path_satisfied:
-            is_hit = True
-            # The rank of a multi-hop path is determined by the LAST chunk you have to read.
-            # However, if a path requires N chunks, the absolute best max rank is N.
-            # To avoid penalizing multi-hop queries, we normalize the rank.
-            # Effective Rank = Actual Max Rank - N + 1
-            # A perfect 3-hop retrieval at ranks 1,2,3 gives Max Rank 3 -> Effective Rank 1 (RR 1.0)
-            actual_max_rank = max(path_ranks)
-            effective_rank = actual_max_rank - len(path) + 1
+    path_ranks = []
+    path_satisfied = True
+    
+    for required_chunk_id in example.ground_truth_chunk_ids:
+        if required_chunk_id in retrieved_chunks:
+            # 1-indexed rank
+            rank = retrieved_chunks.index(required_chunk_id) + 1
+            path_ranks.append(rank)
+        else:
+            path_satisfied = False
+            break
             
-            if effective_rank < best_rank:
-                best_rank = effective_rank
+    if path_satisfied and path_ranks:
+        is_hit = True
+        actual_max_rank = max(path_ranks)
+        effective_rank = actual_max_rank - len(example.ground_truth_chunk_ids) + 1
+        
+        if effective_rank < best_rank:
+            best_rank = effective_rank
 
     return {
         "id": example.id,
@@ -119,6 +119,56 @@ def evaluate_example(example: EvalExample, retrieved_chunks: List[str]) -> dict:
         "reciprocal_rank": 1.0 / best_rank if is_hit else 0.0
     }
 
+def fetch_chunks_for_llm(retrieved_chunk_ids: List[str], conn, table_name: str) -> List[dict]:
+    """Fetches chunks from DB, preserves ranking order, and strips away the chunk ID to prevent cheating."""
+    if not retrieved_chunk_ids:
+        return []
+        
+    with conn.cursor() as cur:
+        format_strings = ','.join(['%s'] * len(retrieved_chunk_ids))
+        cur.execute(f"SELECT id, content FROM {table_name} WHERE id IN ({format_strings})", tuple(retrieved_chunk_ids))
+        rows = cur.fetchall()
+        
+    # Map by id to preserve the retrieved order (vital for RAG evaluation)
+    chunk_map = {row[0]: row[1] for row in rows}
+    
+    clean_chunks = []
+    for i, cid in enumerate(retrieved_chunk_ids):
+        if cid in chunk_map:
+            # We explicitly DO NOT pass the chunk ID (cid) as the file_path! 
+            # In synthetic datasets, the ID is often the exact symbol name (e.g. KMeans.score).
+            # Passing it would allow the Judge/Generator to cheat without reading the code.
+            clean_chunks.append({
+                "content": chunk_map[cid],
+                "file_path": f"Snippet_{i+1}"
+            })
+            
+    return clean_chunks
+
+
+def generate_answer(question: str, chunks: List[dict]) -> str:
+    """Generates an answer using the agent model based ONLY on the provided chunks."""
+    if not chunks:
+        return "I don't have enough context to answer."
+        
+    chunks_text = ""
+    for chunk in chunks:
+        chunks_text += f"\n--- {chunk['file_path']} ---\n{chunk['content']}\n"
+            
+    # 2. Ping LLM (or mock if no API key)
+    if "GEMINI_API_KEY" not in os.environ:
+        return f"[MOCK GENERATION for Question: {question}]"
+        
+    prompt = f"Answer the following question using ONLY the provided code chunks. If the answer is not in the chunks, say so.\n\nChunks:\n{chunks_text}\n\nQuestion: {question}"
+    
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        resp = model.generate_content(prompt)
+        return resp.text
+    except Exception as e:
+        logger.error(f"Generation failed: {e}")
+        return "Failed to generate answer."
+
 
 def main():
     parser = argparse.ArgumentParser(description="Run Retrieval Evaluation")
@@ -128,6 +178,7 @@ def main():
                         help="The retrieval strategy to evaluate.")
     parser.add_argument("--out-dir", type=str, default="results/week3", help="Directory to save the run JSON")
     parser.add_argument("--rrf-k", type=int, default=None, help="Override the k parameter for Reciprocal Rank Fusion")
+    parser.add_argument("--judge", action="store_true", help="Run End-to-End Generation & Judging")
     args = parser.parse_args()
     
     if args.rrf_k is not None:
@@ -154,6 +205,35 @@ def main():
     for example in examples:
         retrieved = retrieve_chunks(conn, table_name, example.question, method=args.method, k=args.k)
         result = evaluate_example(example, retrieved)
+        
+        # 🚨 Phase 4: The End-to-End Pipeline
+        if args.judge:
+            # 1. Fetch sanitized chunks (No leaking ground-truth IDs)
+            actual_chunks = fetch_chunks_for_llm(retrieved, conn, table_name)
+            
+            # 2. Generate Answer
+            answer = generate_answer(example.question, actual_chunks)
+            
+            # 3. Score Answer against the EXACT same sanitized context
+            if "GEMINI_API_KEY" not in os.environ:
+                judge_score = JudgeScore(True, True, True, True, True)
+            else:
+                judge_score = score_answer(example.question, answer, actual_chunks)
+                
+            result["generation"] = answer
+            result["judge_score"] = {
+                "total": judge_score.total_score,
+                "is_correct": judge_score.is_correct,
+                "no_hallucination": judge_score.no_hallucination,
+                "is_complete": judge_score.is_complete,
+                "multi_hop_synthesis": judge_score.multi_hop_synthesis,
+                "has_citation": judge_score.has_citation
+            }
+            
+            if "GEMINI_API_KEY" in os.environ:
+                logger.info("Throttling for 8 seconds to respect Free Tier API quotas...")
+                time.sleep(8)
+            
         results.append(result)
         
     conn.close()
@@ -203,6 +283,23 @@ def main():
     console.print(f"[bold]Retrieval Method:[/bold] {args.method.upper()}")
     console.print(f"[bold]Retrieval Depth:[/bold]  Top-{args.k}")
     console.print(table)
+    
+    if args.judge:
+        # Calculate generation aggregates
+        total_judge = sum(r["judge_score"]["total"] for r in results if "judge_score" in r)
+        avg_judge = total_judge / max(1, len(results))
+        hallucination_failures = sum(1 for r in results if "judge_score" in r and not r["judge_score"]["no_hallucination"])
+        
+        j_table = Table(title="End-to-End Generation Quality (LLM-Judge)", show_header=True, header_style="bold green")
+        j_table.add_column("Metric", style="cyan", width=25)
+        j_table.add_column("Value", justify="right", style="yellow")
+        
+        j_table.add_row("Average Total Score", f"{avg_judge:.1f} / 5.0")
+        j_table.add_row("Hallucination Rate", f"{(hallucination_failures/max(1, len(results)))*100:.1f}%")
+        
+        console.print()
+        console.print(j_table)
+        
     console.print()
 
     # Save Results

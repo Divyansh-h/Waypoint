@@ -42,14 +42,6 @@ class EmbeddedChunk(Chunk):
     """
     vector: list[float] = Field(..., description="The dense vector embedding.")
 
-class GroundTruth(BaseModel):
-    """
-    Defines the acceptable chunks to solve the query.
-    """
-    acceptable_paths: List[List[str]] = Field(
-        ..., 
-        description="A list of valid resolution paths. Each path is a list of chunk IDs that must ALL be retrieved."
-    )
 
 class EvalExample(BaseModel):
     """
@@ -62,14 +54,17 @@ class EvalExample(BaseModel):
         description="The natural language query a user would ask."
     )
     
-    ground_truth: GroundTruth
+    ground_truth_chunk_ids: List[str] = Field(
+        ..., 
+        description="A list of chunk IDs that must ALL be retrieved to successfully answer the question."
+    )
     
     difficulty_tag: Literal["easy", "medium", "hard", "adversarial"] = Field(
         ..., 
         description="Difficulty level of the question."
     )
     
-    question_type: Literal["factual", "debugging", "conceptual", "api_usage", "out_of_scope"] = Field(
+    question_type: Literal["factual", "debugging", "conceptual", "api_usage", "out_of_scope", "multi_hop"] = Field(
         ..., 
         description="Categorization of the user intent to ensure diverse testing."
     )

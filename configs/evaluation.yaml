@@ -1,0 +1,34 @@
+# Evaluation & LLM-as-Judge Configuration
+# Defines the separate API endpoints for generation vs. grading to prevent Self-Enhancement Bias.
+
+llm_config:
+  # ---------------------------------------------------------
+  # THE AGENT (GENERATOR)
+  # ---------------------------------------------------------
+  # This model simulates the actual RAG assistant answering user queries.
+  # We use a fast, lightweight model (like Gemini 1.5 Flash 8B) for high-throughput synthesis.
+  agent_model:
+    provider: "google"
+    model_name: "gemini-1.5-flash-8b"
+    temperature: 0.1
+    max_tokens: 1024
+    
+  # ---------------------------------------------------------
+  # THE JUDGE (EVALUATOR)
+  # ---------------------------------------------------------
+  # This model reads the Agent's answer and grades it.
+  # CRITICAL: This MUST be a different model family than the agent to prevent 
+  # the LLM from grading its own rhetorical tics favorably.
+  # We use a highly capable reasoning model (like Claude 3.5 Sonnet) locked to Temperature 0.
+  judge_model:
+    provider: "anthropic"
+    model_name: "claude-3-5-sonnet-20240620"
+    temperature: 0.0  # Must be 0.0 for deterministic JSON Boolean checklists
+    max_tokens: 512
+
+evaluation:
+  # System prompt mapping
+  judge_prompt_template: "prompts/llm_judge_rubric.txt"
+  
+  # Statistical target for trusting the LLM-Judge
+  target_cohens_kappa: 0.60

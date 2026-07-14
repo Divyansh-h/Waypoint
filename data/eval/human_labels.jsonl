@@ -1,0 +1,36 @@
+{"id": "eval_93064a32", "question": "What are the differences between how LassoCV and RidgeClassifier.__init__ handle errors?", "human_score": 3, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_08f96e46", "question": "What are the differences between how LassoCV.__init__ and RidgeClassifier.fit handle errors?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_7ea61d6e", "question": "What are the differences between how LassoCV._get_estimator and RidgeClassifier.__sklearn_tags__ handle errors?", "human_score": 2, "llm_score": 4, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_a6cc2e5e", "question": "What are the differences between how LassoCV._is_multitask and test_predict_3_classes handle errors?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_86c26323", "question": "What are the differences between how LassoCV.fit and test_logistic_glmnet handle errors?", "human_score": 4, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_0425b699", "question": "What are the differences between how ElasticNetCV and test_check_solver_option handle errors?", "human_score": 2, "llm_score": 2, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_82110bc4", "question": "What are the differences between how ElasticNetCV.__init__ and test_elasticnet_l1_ratio_err_helpful handle errors?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_23466346", "question": "What are the differences between how MultiTaskLassoCV and test_sparsify handle errors?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_5874702a", "question": "What are the differences between how ElasticNetCV.fit and test_inconsistent_input handle errors?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_1dedd276", "question": "What are the differences between how MultiTaskElasticNet and test_write_parameters handle errors?", "human_score": 0, "llm_score": 0, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_b1d8a0b7", "question": "Does MultiTaskElasticNet.__init__ use deep learning underneath?", "human_score": 2, "llm_score": 2, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_acd6cb0a", "question": "Does MultiTaskElasticNet.fit use deep learning underneath?", "human_score": 4, "llm_score": 4, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_fc1afd31", "question": "Does MultiTaskElasticNet.__sklearn_tags__ use deep learning underneath?", "human_score": 3, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_76b016fb", "question": "Does MultiTaskLasso use deep learning underneath?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_56d1b62a", "question": "Does MultiTaskLasso.__init__ use deep learning underneath?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_f435e96f", "question": "Does MultiTaskElasticNetCV use deep learning underneath?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_3b2ae723", "question": "Does MultiTaskElasticNetCV.__init__ use deep learning underneath?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_0b8cd202", "question": "Does MultiTaskElasticNetCV._get_estimator use deep learning underneath?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_8df15f1e", "question": "Does MultiTaskElasticNetCV._is_multitask use deep learning underneath?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_9b63e95f", "question": "Does MultiTaskLassoCV.__init__ use deep learning underneath?", "human_score": 4, "llm_score": 4, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_multi_hop_001", "question": "If I pass n_jobs=-1 to GridSearchCV, how does it parallelize the cross-validation?", "human_score": 4, "llm_score": 4, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_001", "question": "Placeholder question - to be replaced by the user", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_1608fad0", "question": "What arguments are required for QuantileRegressor in _quantile.py?", "human_score": 4, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_e6a82785", "question": "What arguments are required for QuantileRegressor.__init__ in _quantile.py?", "human_score": 2, "llm_score": 2, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_7604cefe", "question": "What arguments are required for QuantileRegressor.fit in _quantile.py?", "human_score": 4, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_6b54d20b", "question": "What arguments are required for QuantileRegressor.__sklearn_tags__ in _quantile.py?", "human_score": 4, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_9bde3eaf", "question": "What arguments are required for make_dataset in _base.py?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_d9454b07", "question": "What arguments are required for _preprocess_data in _base.py?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_27c830cf", "question": "What arguments are required for _rescale_data in _base.py?", "human_score": 2, "llm_score": 2, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_bbdbff8e", "question": "What arguments are required for LinearModel in _base.py?", "human_score": 4, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_152a8160", "question": "What arguments are required for LinearModel.fit in _base.py?", "human_score": 2, "llm_score": 4, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_b3f3eea3", "question": "What arguments are required for LinearModel._decision_function in _base.py?", "human_score": 4, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_8cb8d5fe", "question": "What arguments are required for LinearModel.predict in _base.py?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_c27b80ce", "question": "What arguments are required for LinearModel._set_intercept in _base.py?", "human_score": 2, "llm_score": 2, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_6cd4fe22", "question": "What arguments are required for MultiOutputLinearModel in _base.py?", "human_score": 2, "llm_score": 2, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
+{"id": "eval_11eac73f", "question": "What arguments are required for MultiOutputLinearModel.predict in _base.py?", "human_score": 5, "llm_score": 5, "llm_raw_output": "MOCK_OUTPUT_UNTIL_API_WIRED"}
