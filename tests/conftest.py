@@ -94,3 +94,49 @@ def sample_chunks() -> List[Dict[str, Any]]:
             "content": 'def _check_is_fitted(estimator, attributes=None):\n    """Internal check to ensure estimator is fitted."""\n    if not hasattr(estimator, "coef_"):\n        raise NotFittedError("Not fitted!")'
         }
     ]
+
+class MockResponse:
+    def __init__(self, text: str = "", function_call: Any = None):
+        self._text = text
+        self.function_call = function_call
+        
+    @property
+    def text(self) -> str:
+        return self._text
+        
+    @property
+    def parts(self) -> List[Any]:
+        class MockPart:
+            def __init__(self, text: str, function_call: Any):
+                self.text = text
+                self.function_call = function_call
+        return [MockPart(self._text, self.function_call)]
+
+class MockLLMClient:
+    """
+    A programmable LLM mock.
+    Allows tests to queue up a sequence of native-function-call responses
+    perfectly simulating a multi-hop reasoning chain without burning API tokens.
+    """
+    def __init__(self) -> None:
+        self.response_queue: List[Any] = []
+        self.call_history: List[str] = []
+        
+    def set_responses(self, responses: List[Any]) -> None:
+        """Queue up a list of MockResponse objects that the mock should yield in order."""
+        self.response_queue = responses
+        
+    def generate_content(self, prompt: str) -> Any:
+        """Simulates the LLM API call."""
+        self.call_history.append(prompt)
+        
+        if not self.response_queue:
+            raise RuntimeError("MockLLMClient ran out of queued responses!")
+            
+        # Pop the next programmed response
+        return self.response_queue.pop(0)
+
+@pytest.fixture
+def mock_llm() -> MockLLMClient:
+    """Fixture providing a fresh mock LLM instance for a test."""
+    return MockLLMClient()

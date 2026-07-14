@@ -1,0 +1,28 @@
+agent:
+  # The LLM driving the Agent's reasoning loop
+  model: "gemini-2.5-flash"
+  temperature: 0.1
+  
+  # State Machine Safety Limits
+  max_steps: 6
+  timeout_seconds: 120
+  
+  # Retrieval Configuration
+  # Ties back to Phase 2: 'zero_shot_baseline', 'hard_negative_mined', or 'lora_fine_tuned'
+  retrieval_preset: "lora_fine_tuned"
+  
+  # Dual-Tier Logging Configuration
+  logging:
+    terminal_level: "INFO"       
+    telemetry_enabled: true
+    telemetry_db: "logs/traces.db" # SQLite trace store for forensic debugging
+
+tools:
+  enabled:
+    - search_codebase  # Dense semantic search
+    - read_class       # AST structural lookup
+    - read_file        # Lexical fallback
+    
+state_machine:
+  # If similarity falls below this, trigger early exit rather than hallucinating
+  min_similarity_threshold: 0.40
