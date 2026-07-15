@@ -9,7 +9,10 @@ from typing import Any, Optional
 import yaml
 
 from agent.state import AgentResult, AgentState, TaskContext
+from agent.tools.ast_search import ASTSearchTool
+from agent.tools.git_patch import GitPatchTool
 from agent.tools.registry import ToolRegistry
+from agent.tools.sandbox import CodeSandboxTool
 from agent.tools.search_codebase import SearchCodebaseTool
 from agent.trace import TelemetryTracer
 
@@ -37,6 +40,7 @@ class AgentOrchestrator:
             config = yaml.safe_load(f)["agent"]
             self.max_iterations = config.get("max_steps", 6)
             self.timeout_seconds = config.get("timeout_seconds", 120)
+            self.tool_timeout_seconds = config.get("tool_timeout_seconds", 15)
             
         self.tracer = TelemetryTracer()
         self.llm_client = llm_client
@@ -44,13 +48,22 @@ class AgentOrchestrator:
         if tool_registry is None:
             self.tool_registry = ToolRegistry()
             self.tool_registry.register(SearchCodebaseTool())
+            self.tool_registry.register(CodeSandboxTool())
+            self.tool_registry.register(ASTSearchTool())
+            self.tool_registry.register(GitPatchTool())
         else:
             self.tool_registry = tool_registry
         
         self.system_prompt_base = """You are an advanced Agentic Coding Assistant analyzing a complex Python codebase.
 Your goal is to answer the user's question accurately by exploring the codebase using the tools provided.
-When you need to search, call the search_codebase function.
-When you have gathered enough verified codebase context, just output the final answer as text.
+
+Tool Selection Guidelines:
+- `search_codebase`: Use for general semantic queries or conceptual searches.
+- `ast_search`: Use for strict structural lookups (definitions, callers, subclasses) when you know the exact name.
+- `run_code_sandbox`: Use to securely run Python code to empirically verify array shapes, math, or scikit-learn behaviors on toy data.
+- `git_patch`: Use to apply diffs locally, run pytest validation, and draft PR templates for your proposed fixes.
+
+When you have gathered enough verified context and validated your answer, just output the final answer as text.
 """
 
     def _generate(self, prompt: str, timeout_seconds: float = 120.0) -> Any:
@@ -59,6 +72,7 @@ When you have gathered enough verified codebase context, just output the final a
                 return self.llm_client.generate_content(prompt)
                 
             import google.generativeai as genai
+            from google.api_core import exceptions
             if "GEMINI_API_KEY" not in os.environ:
                 class MockResp:
                     text = "API KEY MISSING."
@@ -68,7 +82,27 @@ When you have gathered enough verified codebase context, just output the final a
                 
             tool_declaration = {"function_declarations": self.tool_registry.get_function_declarations()}
             model = genai.GenerativeModel(model_name='gemini-2.5-flash', tools=[tool_declaration])  # type: ignore
-            return model.generate_content(prompt)
+            
+            max_retries = 8
+            base_delay = 10.0
+            
+            for attempt in range(max_retries):
+                try:
+                    return model.generate_content(prompt)
+                except exceptions.ResourceExhausted as e:
+                    if attempt == max_retries - 1:
+                        raise e
+                    logger.warning(f"⚠️ Quota exceeded (429). Retrying in {base_delay}s... (Attempt {attempt+1}/{max_retries})")
+                    time.sleep(base_delay)
+                    # For Free Tier limits (15 RPM), waiting ~15-30s helps clear the burst window.
+                    base_delay *= 1.5
+                except Exception as e:
+                    if "429" in str(e) and attempt < max_retries - 1:
+                        logger.warning(f"⚠️ Quota exceeded string match (429). Retrying in {base_delay}s... (Attempt {attempt+1}/{max_retries})")
+                        time.sleep(base_delay)
+                        base_delay *= 1.5
+                    else:
+                        raise e
             
         return _execute_with_timeout(_call_llm, timeout_seconds)
 
@@ -144,8 +178,9 @@ When you have gathered enough verified codebase context, just output the final a
                 is_error = False
                 try:
                     time_left = self.timeout_seconds - (time.time() - start_time)
+                    tool_time_budget = min(time_left, self.tool_timeout_seconds)
                     tool = self.tool_registry.get_tool(pending_tool_name)
-                    pending_tool_result = str(_execute_with_timeout(tool.execute, time_left, pending_tool_args))
+                    pending_tool_result = str(_execute_with_timeout(tool.execute, tool_time_budget, pending_tool_args))
                 except Exception as e:
                     logger.error(f"❌ Tool Execution Error: {str(e)}")
                     pending_tool_result = f"Tool '{pending_tool_name}' execution failed with exception: {str(e)}"
@@ -156,7 +191,8 @@ When you have gathered enough verified codebase context, just output the final a
                     state=context.current_state.name,
                     input_text=json.dumps(pending_tool_args),
                     output_text=pending_tool_result,
-                    tool_called=pending_tool_name
+                    tool_called=pending_tool_name,
+                    is_error=is_error
                 )
                 
                 if is_error:

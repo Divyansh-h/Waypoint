@@ -1,0 +1,28 @@
+# Use a slim, secure base image
+FROM python:3.9-slim
+
+# Prevent Python from writing .pyc files and enable unbuffered logging
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install scikit-learn and its core dependencies
+# (numpy, scipy, joblib, threadpoolctl are pulled in automatically)
+RUN pip install --no-cache-dir scikit-learn pandas
+
+# Create a dedicated, non-root user for executing agent code
+# Using explicit UID/GID 1000 to prevent host-mount permission issues
+RUN groupadd -g 1000 sandboxgroup && \
+    useradd -u 1000 -g sandboxgroup -s /bin/bash -m sandboxuser
+
+# Create a designated scratch directory for agent I/O
+RUN mkdir /sandbox && chown sandboxuser:sandboxgroup /sandbox
+WORKDIR /sandbox
+
+# Drop root privileges immediately
+USER sandboxuser:sandboxgroup
+
+# The orchestrator will mount a Python script here and execute it.
+# Note: Network disabling MUST be enforced at runtime using:
+# `docker run --network none`
+# It cannot be enforced at the image build layer.
+CMD ["python"]

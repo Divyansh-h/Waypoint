@@ -1,0 +1,28 @@
+# Configuration for the isolated Code Sandbox tool
+sandbox:
+  # Resource Constraints (Minimum Viable Isolation for local pipelines)
+  resources:
+    cpu_cores: 1.0
+    memory_limit: "512m"
+    
+  # Timeouts (Enforced via SIGTERM then SIGKILL)
+  timeouts:
+    execution_timeout_seconds: 5
+    hard_kill_timeout_seconds: 7
+    
+  # Ephemeral storage constraint
+  storage:
+    max_scratch_size_mb: 50
+    
+  # Network & Security
+  security:
+    network_disabled: true
+    run_as_user: "1000:1000"
+    
+  # Permitted pre-installed Python packages for the Docker image
+  allowed_packages:
+    - scikit-learn
+    - pandas
+    - numpy
+    - scipy
+    - joblib
