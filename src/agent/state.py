@@ -50,6 +50,14 @@ class TaskContext:
             res += f"\n[Snippet ID: {cid}]\n{content}\n"
         return res
 
+    def __repr__(self) -> str:
+        return (
+            f"TaskContext(state={self.current_state.name}, "
+            f"iterations={self.iterations}, "
+            f"context_chunks={len(self.gathered_context)}, "
+            f"reasoning_steps={len(self.reasoning_history)})"
+        )
+
 @dataclass
 class AgentResult:
     """The final payload returned by the Orchestrator."""
@@ -58,3 +66,11 @@ class AgentResult:
     success: bool
     termination_reason: str
     context_used: Dict[str, str]
+
+    def __repr__(self) -> str:
+        return (
+            f"AgentResult(success={self.success}, "
+            f"iterations={self.iterations}, "
+            f"reason={self.termination_reason!r}, "
+            f"context_chunks={len(self.context_used)})"
+        )

@@ -1,8 +1,7 @@
 from pathlib import Path
-from typing import Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
-from typing import List, Literal, Optional
 
 
 class Chunk(BaseModel):

@@ -16,9 +16,25 @@ results/
 .env
 .env.*
 .models_cache/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
 
 # Wandb
 wandb/
 
 # Sandbox Scratch
 sandbox_workspace/
+
+# Model checkpoints (large binary files)
+checkpoints/
+
