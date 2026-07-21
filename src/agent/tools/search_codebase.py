@@ -2,6 +2,7 @@
 from typing import Any, Dict
 
 import psycopg2
+from psycopg2 import sql
 import yaml
 from pgvector.psycopg2 import register_vector
 
@@ -59,8 +60,13 @@ class SearchCodebaseTool(BaseTool):
                 
             # 2. Fetch the actual raw Python strings for those IDs
             with self.conn.cursor() as cur:
-                format_strings = ','.join(['%s'] * len(retrieved_chunk_ids))
-                cur.execute(f"SELECT id, content FROM {self.table_name} WHERE id IN ({format_strings})", tuple(retrieved_chunk_ids))
+                format_strings = sql.SQL(', ').join([sql.Placeholder()] * len(retrieved_chunk_ids))
+                cur.execute(
+                    sql.SQL("SELECT id, content FROM {} WHERE id IN ({})").format(
+                        sql.Identifier(self.table_name), format_strings
+                    ),
+                    tuple(retrieved_chunk_ids),
+                )
                 rows = cur.fetchall()
                 
             # 3. Format as a string for the Agent's clipboard

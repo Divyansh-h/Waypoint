@@ -1,11 +1,19 @@
 # ruff: noqa: E501
 import os
+import re
 import uuid
 import yaml
 import subprocess
+from pathlib import Path
 from typing import Any, Dict
 
 from agent.tools.base import BaseTool
+
+# Characters and patterns that should never appear in a test scope or diff
+# from an LLM — these indicate shell injection or pytest plugin attacks.
+_SHELL_METACHAR_PATTERN = re.compile(r"[;&|`$><!\n\r]")
+_PYTEST_FLAG_PATTERN = re.compile(r"(^|\s)--?\w")  # Catches -p, --co, --override-ini, etc.
+_MAX_DIFF_SIZE = 50_000  # 50 KB — no legitimate single-function patch should exceed this
 
 
 class GitPatchTool(BaseTool):
@@ -31,6 +39,73 @@ class GitPatchTool(BaseTool):
             "Supported actions: 'apply_patch', 'run_tests', 'draft_pr_description'. "
             "NOTE: 'draft_pr_description' generates a draft markdown template only; it NEVER auto-submits a pull request."
         )
+
+    # ── Input Validation ──────────────────────────────────────────────────
+
+    @staticmethod
+    def _validate_scope(scope: str, repo_path: str) -> str:
+        """
+        Validates and resolves a test scope path, blocking:
+          - Shell metacharacters (;, &, |, `, $, etc.)
+          - Pytest CLI flags (--co, -p malicious_plugin, --override-ini, etc.)
+          - Path traversal via '..' components
+          - Paths outside the repository root (including symlink escapes)
+          - Non-.py file extensions
+
+        Returns the validated, resolved absolute path on success.
+        Raises ValueError with a descriptive message on failure.
+        """
+        if _SHELL_METACHAR_PATTERN.search(scope):
+            raise ValueError(f"Scope contains forbidden shell metacharacters: {scope!r}")
+
+        if _PYTEST_FLAG_PATTERN.search(scope):
+            raise ValueError(f"Scope contains pytest flags, which are not allowed: {scope!r}")
+
+        # Block explicit path traversal before resolution
+        if ".." in scope.split(os.sep):
+            raise ValueError(f"Scope contains '..' path traversal: {scope!r}")
+
+        # Resolve to an absolute path and verify it lives inside the repo
+        repo_root = Path(repo_path).resolve()
+        resolved = (repo_root / scope).resolve()
+
+        if not str(resolved).startswith(str(repo_root)):
+            raise ValueError(
+                f"Scope resolves outside the repository root: {scope!r} -> {resolved}"
+            )
+
+        # Must be a .py file or a directory (pytest can run against directories)
+        if resolved.suffix and resolved.suffix != ".py":
+            raise ValueError(f"Scope must target a .py file or directory, got: {scope!r}")
+
+        return str(resolved)
+
+    @staticmethod
+    def _validate_diff(diff: str) -> None:
+        """
+        Validates a diff/patch string, blocking:
+          - Excessively large patches (> 50 KB)
+          - Embedded shell payloads (backticks, $(), pipe chains)
+        
+        Raises ValueError with a descriptive message on failure.
+        """
+        if len(diff) > _MAX_DIFF_SIZE:
+            raise ValueError(
+                f"Diff is {len(diff)} bytes, exceeding the {_MAX_DIFF_SIZE} byte safety limit."
+            )
+
+        if _SHELL_METACHAR_PATTERN.search(diff):
+            # Diffs legitimately contain > and < for context lines, so we check
+            # specifically for dangerous sequences rather than individual chars.
+            dangerous_patterns = ["`", "$(", "| ", "&&", "||", "; "]
+            for pattern in dangerous_patterns:
+                if pattern in diff:
+                    raise ValueError(
+                        f"Diff contains suspicious shell pattern {pattern!r}. "
+                        "Refusing to apply."
+                    )
+
+    # ── Tool Actions ──────────────────────────────────────────────────────
 
     def execute(self, args: Dict[str, Any]) -> str:
         action = args.get("action")
@@ -61,17 +136,35 @@ class GitPatchTool(BaseTool):
             return f"Error: Unsupported action '{action}'."
 
     def _stub_apply_patch(self, diff: str) -> str:
+        # Validate the diff content before writing it to disk
+        try:
+            self._validate_diff(diff)
+        except ValueError as e:
+            return f"Error: Diff validation failed: {e}"
+
         patch_file = f"/tmp/patch_{uuid.uuid4().hex}.diff"
         with open(patch_file, "w") as f:
             f.write(diff)
             
         try:
+            # Dry-run first: verify the patch applies cleanly before mutating the repo
+            check_result = subprocess.run(
+                ["git", "apply", "--check", patch_file],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if check_result.returncode != 0:
+                return f"Failed to apply patch (dry-run check):\n{check_result.stderr}"
+
+            # Apply for real
             result = subprocess.run(
                 ["git", "apply", patch_file],
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,
-                timeout=15
+                timeout=15,
             )
             if result.returncode != 0:
                 return f"Failed to apply patch:\n{result.stderr}"
@@ -85,13 +178,19 @@ class GitPatchTool(BaseTool):
                 os.remove(patch_file)
 
     def _stub_run_tests(self, scope: str) -> str:
+        # Validate and resolve the scope to a safe absolute path
+        try:
+            resolved_scope = self._validate_scope(scope, self.repo_path)
+        except ValueError as e:
+            return f"Error: Scope validation failed: {e}"
+
         try:
             result = subprocess.run(
-                ["pytest", scope],
+                ["pytest", resolved_scope],
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=60,
             )
             output = ""
             if result.stdout:
@@ -154,3 +253,4 @@ class GitPatchTool(BaseTool):
                 "required": ["action"]
             }
         }
+

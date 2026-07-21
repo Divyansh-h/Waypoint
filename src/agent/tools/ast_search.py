@@ -1,6 +1,7 @@
 # ruff: noqa: E501
 import ast
 import psycopg2
+from psycopg2 import sql
 import yaml
 from typing import Any, Dict
 
@@ -53,7 +54,7 @@ class ASTSearchTool(BaseTool):
     def _stub_find_definition(self, name: str) -> str:
         results = []
         with self.conn.cursor() as cur:
-            cur.execute(f"SELECT file_path, line_start, line_end, content FROM {self.table_name} WHERE content LIKE %s", (f"%{name}%",))
+            cur.execute(sql.SQL("SELECT file_path, line_start, line_end, content FROM {} WHERE content LIKE %s").format(sql.Identifier(self.table_name)), (f"%{name}%",))
             for file_path, line_start, line_end, content in cur.fetchall():
                 try:
                     tree = ast.parse(content)
@@ -69,7 +70,7 @@ class ASTSearchTool(BaseTool):
     def _stub_find_callers(self, name: str) -> str:
         results = []
         with self.conn.cursor() as cur:
-            cur.execute(f"SELECT file_path, line_start, line_end, content FROM {self.table_name} WHERE content LIKE %s", (f"%{name}%",))
+            cur.execute(sql.SQL("SELECT file_path, line_start, line_end, content FROM {} WHERE content LIKE %s").format(sql.Identifier(self.table_name)), (f"%{name}%",))
             for file_path, line_start, line_end, content in cur.fetchall():
                 try:
                     tree = ast.parse(content)
@@ -87,7 +88,7 @@ class ASTSearchTool(BaseTool):
     def _stub_find_subclasses(self, base_class: str) -> str:
         results = []
         with self.conn.cursor() as cur:
-            cur.execute(f"SELECT file_path, line_start, line_end, content FROM {self.table_name} WHERE content LIKE %s", (f"%{base_class}%",))
+            cur.execute(sql.SQL("SELECT file_path, line_start, line_end, content FROM {} WHERE content LIKE %s").format(sql.Identifier(self.table_name)), (f"%{base_class}%",))
             for file_path, line_start, line_end, content in cur.fetchall():
                 try:
                     tree = ast.parse(content)

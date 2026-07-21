@@ -5,6 +5,7 @@ from typing import Any, List
 
 import psycopg2
 from pgvector.psycopg2 import register_vector  # type: ignore
+from psycopg2 import sql
 from psycopg2.extras import execute_batch
 
 from ingestion.models import EmbeddedChunk
@@ -55,8 +56,8 @@ class PgVectorIndexer:
             # Register the vector type with the psycopg2 connection context
             register_vector(conn)
             
-            cur.execute(f"""
-                CREATE TABLE IF NOT EXISTS {self.table_name} (
+            cur.execute(sql.SQL("""
+                CREATE TABLE IF NOT EXISTS {} (
                     id VARCHAR(64) PRIMARY KEY,
                     file_path TEXT NOT NULL,
                     chunk_type VARCHAR(50) NOT NULL,
@@ -66,16 +67,17 @@ class PgVectorIndexer:
                     line_end INT NOT NULL,
                     content TEXT NOT NULL,
                     metadata JSONB,
-                    embedding VECTOR({self.vector_dim})
+                    embedding VECTOR({})
                 );
-            """)
+            """).format(sql.Identifier(self.table_name), sql.Literal(self.vector_dim)))
             
             # Optional: Add an HNSW index for much faster approximate nearest neighbor (ANN) search
             # Ensure index creation doesn't fail if it already exists
-            cur.execute(f"""
-                CREATE INDEX IF NOT EXISTS {self.table_name}_embedding_idx 
-                ON {self.table_name} USING hnsw (embedding vector_cosine_ops);
-            """)
+            idx_name = f"{self.table_name}_embedding_idx"
+            cur.execute(sql.SQL("""
+                CREATE INDEX IF NOT EXISTS {} 
+                ON {} USING hnsw (embedding vector_cosine_ops);
+            """).format(sql.Identifier(idx_name), sql.Identifier(self.table_name)))
         conn.commit()
 
     def index_chunks(self, embedded_chunks: List[EmbeddedChunk], batch_size: int = 100) -> None:
@@ -100,8 +102,8 @@ class PgVectorIndexer:
             raise
 
         # The ON CONFLICT clause enables upserting based on the stable ID
-        query = f"""
-            INSERT INTO {self.table_name} (
+        query = sql.SQL("""
+            INSERT INTO {} (
                 id, file_path, chunk_type, function_name, section_path, 
                 line_start, line_end, content, metadata, embedding
             )
@@ -116,7 +118,7 @@ class PgVectorIndexer:
                 content = EXCLUDED.content,
                 metadata = EXCLUDED.metadata,
                 embedding = EXCLUDED.embedding;
-        """
+        """).format(sql.Identifier(self.table_name))
 
         data = []
         for chunk in embedded_chunks:

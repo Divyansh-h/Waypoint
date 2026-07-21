@@ -2,6 +2,7 @@ import logging
 from typing import Any, List, Optional
 
 import yaml
+from psycopg2 import sql
 
 from ingestion.embed import get_jina_embeddings
 from retrieval.fusion import reciprocal_rank_fusion
@@ -59,23 +60,25 @@ class RetrievalPipeline:
             
         with self.conn.cursor() as cur:
             cur.execute(
-                f"SELECT id FROM {self.table_name} ORDER BY embedding <=> %s::vector LIMIT %s",
-                (embeddings[0], k)
+                sql.SQL("SELECT id FROM {} ORDER BY embedding <=> %s::vector LIMIT %s").format(
+                    sql.Identifier(self.table_name)
+                ),
+                (embeddings[0], k),
             )
             return [row[0] for row in cur.fetchall()]
 
     def _retrieve_bm25(self, query: str, k: int) -> List[str]:
         with self.conn.cursor() as cur:
             cur.execute(
-                f"""
-                SELECT id FROM {self.table_name}
+                sql.SQL("""
+                SELECT id FROM {}
                 WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s)
                 ORDER BY ts_rank(
                     to_tsvector('english', content), 
                     plainto_tsquery('english', %s)
                 ) DESC
                 LIMIT %s
-                """,
+                """).format(sql.Identifier(self.table_name)),
                 (query, query, k),
             )
             return [row[0] for row in cur.fetchall()]
@@ -85,12 +88,14 @@ class RetrievalPipeline:
         if not embeddings:
             return []
             
+        tbl = sql.Identifier(self.table_name)
+        rrf_k = sql.Literal(self.rrf_k)
         with self.conn.cursor() as cur:
             cur.execute(
-                f"""
+                sql.SQL("""
                 WITH semantic_search AS (
                     SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> %s::vector) as rank 
-                    FROM {self.table_name} 
+                    FROM {tbl} 
                     LIMIT %s
                 ), keyword_search AS (
                     SELECT id, ROW_NUMBER() OVER (
@@ -99,19 +104,19 @@ class RetrievalPipeline:
                             plainto_tsquery('english', %s)
                         ) DESC
                     ) as rank
-                    FROM {self.table_name} 
+                    FROM {tbl} 
                     WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s) 
                     LIMIT %s
                 )
                 SELECT COALESCE(s.id, k.id) as id, 
                        s.rank as dense_rank, 
                        k.rank as bm25_rank,
-                       COALESCE(1.0 / ({self.rrf_k} + s.rank), 0.0) + 
-                       COALESCE(1.0 / ({self.rrf_k} + k.rank), 0.0) as rrf_score
+                       COALESCE(1.0 / ({rrf_k} + s.rank), 0.0) + 
+                       COALESCE(1.0 / ({rrf_k} + k.rank), 0.0) as rrf_score
                 FROM semantic_search s FULL OUTER JOIN keyword_search k ON s.id = k.id
                 ORDER BY rrf_score DESC 
                 LIMIT %s;
-                """,
+                """).format(tbl=tbl, rrf_k=rrf_k),
                 (embeddings[0], k, query, query, k, k),
             )
             return [row[0] for row in cur.fetchall()]
@@ -125,23 +130,24 @@ class RetrievalPipeline:
         with self.conn.cursor() as cur:
             # Dense Retrieval
             cur.execute(
-                f"SELECT id, content FROM {self.table_name} "
-                "ORDER BY embedding <=> %s::vector LIMIT %s",
+                sql.SQL("SELECT id, content FROM {} ORDER BY embedding <=> %s::vector LIMIT %s").format(
+                    sql.Identifier(self.table_name)
+                ),
                 (embeddings[0], self.pool_size),
             )
             dense_results = [{"id": r[0], "content": r[1]} for r in cur.fetchall()]
             
             # BM25 Retrieval
             cur.execute(
-                f"""
-                SELECT id, content FROM {self.table_name}
+                sql.SQL("""
+                SELECT id, content FROM {}
                 WHERE to_tsvector('english', content) @@ plainto_tsquery('english', %s)
                 ORDER BY ts_rank(
                     to_tsvector('english', content), 
                     plainto_tsquery('english', %s)
                 ) DESC
                 LIMIT %s
-                """,
+                """).format(sql.Identifier(self.table_name)),
                 (query, query, self.pool_size),
             )
             bm25_results = [{"id": r[0], "content": r[1]} for r in cur.fetchall()]
