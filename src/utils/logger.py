@@ -37,17 +37,18 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(log_obj)
 
 
-def setup_ingestion_logger(log_dir: str = "logs") -> logging.Logger:
+def setup_logger(name: str, log_dir: str = "logs") -> logging.Logger:
     """
     Sets up a structured JSON logger that outputs to both console and a log file.
     
     Args:
+        name: Name of the logger.
         log_dir: Directory to save the log files.
         
     Returns:
         logging.Logger: The configured logger.
     """
-    logger = logging.getLogger("ingestion_pipeline")
+    logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
     
     # Prevent adding handlers multiple times if instantiated repeatedly
@@ -63,7 +64,7 @@ def setup_ingestion_logger(log_dir: str = "logs") -> logging.Logger:
     
     # Create a unique log file for this run based on timestamp
     run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_handler = logging.FileHandler(log_path / f"ingestion_run_{run_timestamp}.log")
+    file_handler = logging.FileHandler(log_path / f"{name}_run_{run_timestamp}.log")
     
     # Set the JSON formatter for both
     json_formatter = JSONFormatter()

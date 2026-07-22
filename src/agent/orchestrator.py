@@ -15,8 +15,9 @@ from agent.tools.registry import ToolRegistry
 from agent.tools.sandbox import CodeSandboxTool
 from agent.tools.search_codebase import SearchCodebaseTool
 from agent.trace import TelemetryTracer
+from utils.logger import setup_logger
 
-logger = logging.getLogger("Orchestrator")
+logger = setup_logger("Orchestrator")
 
 def _execute_with_timeout(func: Any, timeout_seconds: float, *args: Any, **kwargs: Any) -> Any:
     """Executes a function in a background thread, strictly terminating if it exceeds the wall-clock timeout."""

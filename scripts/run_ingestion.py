@@ -14,7 +14,7 @@ from tqdm import tqdm
 src_path = Path(__file__).parent.parent / "src"
 sys.path.append(str(src_path.resolve()))
 
-from ingestion.logger import setup_ingestion_logger
+from utils.logger import setup_logger
 from ingestion.crawler import RepoCrawler
 from ingestion.chunker import ASTChunker
 from ingestion.doc_chunker import DocChunker
@@ -174,7 +174,7 @@ def print_summary(total_time: float, num_files: int, all_chunks: List[Chunk]):
 
 def main():
     args = parse_args()
-    logger = setup_ingestion_logger()
+    logger = setup_logger("ingestion_pipeline")
     
     logger.info(f"Starting ingestion pipeline using config: {args.config}")
     start_time = time.time()

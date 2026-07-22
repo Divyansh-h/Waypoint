@@ -22,8 +22,9 @@ agent:
 tools:
   enabled:
     - search_codebase  # Dense semantic search
-    - read_class       # AST structural lookup
-    - read_file        # Lexical fallback
+    - run_code_sandbox # Secure python code execution
+    - ast_search       # AST structural lookup
+    - git_patch        # Apply local diffs and PR drafting
     
 state_machine:
   # If similarity falls below this, trigger early exit rather than hallucinating

@@ -1,7 +1,6 @@
 import pytest
 from pathlib import Path
-from typing import List, Dict, Any
-
+from typing import List, Dict, Any, Optional
 
 @pytest.fixture
 def fake_repo(tmp_path: Path) -> Path:
@@ -96,7 +95,7 @@ def sample_chunks() -> List[Dict[str, Any]]:
     ]
 
 class MockResponse:
-    def __init__(self, text: str = "", function_call: Any = None):
+    def __init__(self, text: str = "", function_call: Optional[Any] = None):
         self._text = text
         self.function_call = function_call
         
