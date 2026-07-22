@@ -1,4 +1,4 @@
-# config/training_smoke_test.yaml
+# configs/training/training_smoke_test.yaml
 # Use this config to verify the training loop runs end-to-end before a real run.
 
 # Experiment Tracking

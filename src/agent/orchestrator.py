@@ -245,8 +245,24 @@ When you have gathered enough verified context and validated your answer, just o
                 self.tracer.log_step(context.iterations, context.current_state.name, verify_prompt, verify_result, "verify_context")
                 
                 if verify_result == "DONE":
-                    context.reasoning_history.append("System: Context verified as sufficient.")
-                    context.current_state = AgentState.PLANNING
+                    context.reasoning_history.append("System: Context verified as sufficient. Synthesizing final answer.")
+                    # Generate the final answer from gathered context via a synthesis LLM call
+                    synthesis_prompt = (
+                        f"You are answering the following question using ONLY the verified codebase context below.\n\n"
+                        f"USER QUESTION: {context.query}\n\n"
+                        f"{context.summarize_context_for_prompt()}\n\n"
+                        f"Provide a complete, accurate answer with specific code references."
+                    )
+                    try:
+                        time_left = self.timeout_seconds - (time.time() - start_time)
+                        resp = self._generate(synthesis_prompt, timeout_seconds=time_left)
+                        context.final_answer = getattr(resp, 'text', None)
+                        if not context.final_answer and hasattr(resp, 'parts') and resp.parts:
+                            context.final_answer = resp.parts[0].text
+                    except Exception as e:
+                        logger.warning(f"⚠️ Synthesis LLM error after DONE verdict: {str(e)}")
+                        context.final_answer = None
+                    context.current_state = AgentState.SYNTHESIZING
                 else:
                     if context.retrieval_count >= 3:
                         logger.warning("⚠️ Reformulation bound reached (3 searches). Forcing synthesis.")

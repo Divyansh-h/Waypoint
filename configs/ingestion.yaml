@@ -38,7 +38,7 @@ chunking:
 database:
   connection_string: "postgresql://user:password@localhost:5432/rag_db"
   collection_name: "sklearn_code"
-  embedding_model: "text-embedding-3-small"
+  # NOTE: Embedding model is currently hardcoded to 'jina-embeddings-v3' in src/ingestion/embed.py
 
 # Retrieval Configuration
 retrieval:

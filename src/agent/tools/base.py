@@ -30,21 +30,10 @@ class BaseTool(ABC):
         """
         pass
         
+    @abstractmethod
     def get_function_declaration(self) -> Dict[str, Any]:
         """
-        Auto-generates the JSON schema for native LLM function calling APIs (Gemini/OpenAI).
+        Returns the JSON schema for native LLM function calling APIs (Gemini/OpenAI).
+        Each tool must define its own schema matching its specific parameters.
         """
-        return {
-            "name": self.name,
-            "description": self.description,
-            "parameters": {
-                "type": "OBJECT",
-                "properties": {
-                    "query": {
-                        "type": "STRING",
-                        "description": "The search term to look up."
-                    }
-                },
-                "required": ["query"]
-            }
-        }
+        pass

@@ -1,4 +1,5 @@
 # ruff: noqa: E501
+import logging
 from typing import Any, Dict
 
 import psycopg2
@@ -9,11 +10,17 @@ from pgvector.psycopg2 import register_vector
 from agent.tools.base import BaseTool
 from retrieval.pipeline import RetrievalPipeline
 
+logger = logging.getLogger(__name__)
+
 
 class SearchCodebaseTool(BaseTool):
     """
     Agent tool wrapper for the Phase 2 Retrieval Pipeline.
     Allows the Agent to perform semantic vector searches across the codebase.
+    
+    Implements the context manager protocol for safe DB connection cleanup:
+        with SearchCodebaseTool() as tool:
+            tool.execute({"query": "..."})
     """
     
     def __init__(self, config_path: str = "configs/agent.yaml", db_config_path: str = "configs/ingestion.yaml"):
@@ -33,6 +40,18 @@ class SearchCodebaseTool(BaseTool):
         self.conn = psycopg2.connect(self.conn_str)
         register_vector(self.conn)
         self.pipeline = RetrievalPipeline(self.conn, self.table_name)
+
+    def __enter__(self) -> "SearchCodebaseTool":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """Explicitly close the DB connection. Idempotent."""
+        if hasattr(self, "conn") and self.conn and not self.conn.closed:
+            self.conn.close()
+            logger.debug("SearchCodebaseTool DB connection closed.")
         
     @property
     def name(self) -> str:
@@ -80,8 +99,19 @@ class SearchCodebaseTool(BaseTool):
             
         except Exception as e:
             return f"ERROR during codebase search: {str(e)}"
-            
-    def __del__(self) -> None:
-        """Cleanup persistent DB connection."""
-        if hasattr(self, 'conn') and self.conn:
-            self.conn.close()
+
+    def get_function_declaration(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": {
+                "type": "OBJECT",
+                "properties": {
+                    "query": {
+                        "type": "STRING",
+                        "description": "The search term or concept to look up in the codebase (e.g., 'RandomForest validate inputs')."
+                    }
+                },
+                "required": ["query"]
+            }
+        }

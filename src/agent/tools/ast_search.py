@@ -1,5 +1,6 @@
 # ruff: noqa: E501
 import ast
+import logging
 import psycopg2
 from psycopg2 import sql
 import yaml
@@ -7,11 +8,17 @@ from typing import Any, Dict
 
 from agent.tools.base import BaseTool
 
+logger = logging.getLogger(__name__)
+
 
 class ASTSearchTool(BaseTool):
     """
     Deterministic structural search tool for finding definitions, callers, 
     and inheritance graphs using Abstract Syntax Trees.
+    
+    Implements the context manager protocol for safe DB connection cleanup:
+        with ASTSearchTool() as tool:
+            tool.execute({"query_type": "find_definition", "target_name": "fit"})
     """
 
     def __init__(self, db_config_path: str = "configs/ingestion.yaml"):
@@ -21,6 +28,18 @@ class ASTSearchTool(BaseTool):
             self.table_name = db_config["database"].get("collection_name", "chunks")
             
         self.conn = psycopg2.connect(self.conn_str)
+
+    def __enter__(self) -> "ASTSearchTool":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """Explicitly close the DB connection. Idempotent."""
+        if hasattr(self, "conn") and self.conn and not self.conn.closed:
+            self.conn.close()
+            logger.debug("ASTSearchTool DB connection closed.")
 
     @property
     def name(self) -> str:
