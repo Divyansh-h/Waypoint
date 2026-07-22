@@ -3,7 +3,7 @@ name = "waypoint"
 version = "0.1.0"
 description = "AST-aware RAG pipeline for scikit-learn"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
     "pgvector>=0.2.5",
     "psycopg2-binary>=2.9.9",
@@ -34,14 +34,14 @@ packages = ["src/ingestion", "src/retrieval", "src/eval", "src/agent", "src/trai
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"] # flake8, pyflakes, isort
 ignore = []
 
 [tool.black]
-line-length = 88
+line-length = 100
 target-version = ['py311']
 
 [tool.mypy]

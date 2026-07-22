@@ -1,5 +1,5 @@
+import functools
 import logging
-import os
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
@@ -17,15 +17,12 @@ class Reranker:
         self.model_name = model_name
         self.cache_dir = cache_dir
         
-        # Ensure HF and SentenceTransformers use our local project cache
-        os.environ["HF_HOME"] = os.path.abspath(self.cache_dir)
-        os.environ["SENTENCE_TRANSFORMERS_HOME"] = os.path.abspath(self.cache_dir)
-        
         if self.model_name != "stub":
             try:
                 from sentence_transformers import CrossEncoder
                 logger.info(f"Loading CrossEncoder model: {self.model_name}...")
-                self.model = CrossEncoder(self.model_name)
+                # Pass cache_folder directly instead of mutating os.environ
+                self.model = CrossEncoder(self.model_name, cache_folder=self.cache_dir)
             except ImportError as e:
                 logger.error("sentence-transformers is not installed. Please install it.")
                 raise RuntimeError(f"Missing dependency for reranker: {e}") from e
@@ -70,14 +67,12 @@ class Reranker:
         # Sort descending by the cross-encoder score
         return sorted(candidates, key=lambda x: x.get("reranker_score", 0), reverse=True)
 
-_instance = None
 
+@functools.lru_cache(maxsize=4)
 def get_reranker(model_name: str, cache_dir: str = ".models_cache") -> Reranker:
     """
-    Singleton getter to prevent reloading the heavy cross-encoder model into memory
-    on every single query evaluation.
+    Cached factory to prevent reloading the heavy cross-encoder model into memory
+    on every single query evaluation. Thread-safe via the GIL-atomic lru_cache.
     """
-    global _instance
-    if _instance is None or _instance.model_name != model_name:
-        _instance = Reranker(model_name, cache_dir)
-    return _instance
+    return Reranker(model_name, cache_dir)
+

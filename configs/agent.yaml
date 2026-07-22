@@ -7,6 +7,7 @@ agent:
   max_steps: 6
   timeout_seconds: 120
   tool_timeout_seconds: 15
+  max_reformulations: 3             # Max query reformulations before forcing synthesis
   
   # Retrieval Configuration
   # Ties back to Phase 2: 'zero_shot_baseline', 'hard_negative_mined', or 'lora_fine_tuned'

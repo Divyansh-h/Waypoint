@@ -41,6 +41,7 @@ class AgentOrchestrator:
             self.max_iterations = config.get("max_steps", 6)
             self.timeout_seconds = config.get("timeout_seconds", 120)
             self.tool_timeout_seconds = config.get("tool_timeout_seconds", 15)
+            self.max_reformulations = config.get("max_reformulations", 3)
             
         self.tracer = TelemetryTracer()
         self.llm_client = llm_client
@@ -264,8 +265,8 @@ When you have gathered enough verified context and validated your answer, just o
                         context.final_answer = None
                     context.current_state = AgentState.SYNTHESIZING
                 else:
-                    if context.retrieval_count >= 3:
-                        logger.warning("⚠️ Reformulation bound reached (3 searches). Forcing synthesis.")
+                    if context.retrieval_count >= self.max_reformulations:
+                        logger.warning(f"⚠️ Reformulation bound reached ({self.max_reformulations} searches). Forcing synthesis.")
                         context.reasoning_history.append("System: Context deemed insufficient, but max reformulations reached. Synthesizing.")
                         context.current_state = AgentState.SYNTHESIZING
                     else:
