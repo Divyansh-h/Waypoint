@@ -1,13 +1,11 @@
 import argparse
-import json
-import os
 import sys
 import uuid
 from pathlib import Path
 
 import psycopg2
-from pgvector.psycopg2 import register_vector
 import yaml
+from pgvector.psycopg2 import register_vector
 
 # Ensure src/ is in the python path
 src_dir = Path(__file__).parent.parent / "src"
@@ -40,7 +38,7 @@ def get_db_connection(conn_str):
 
 def search_chunks_vector(conn, table_name, query_text, limit=5):
     """Embeds the query and performs a vector similarity search."""
-    print(f"\n[🔍] Embedding query via Jina API...")
+    print("\n[🔍] Embedding query via Jina API...")
     try:
         # get_jina_embeddings returns a list of embeddings, we want the first one
         embeddings = get_jina_embeddings([query_text])

@@ -1,5 +1,7 @@
 from pathlib import Path
+
 from ingestion.crawler import RepoCrawler
+
 
 def test_crawler_finds_correct_files(fake_repo: Path):
     """

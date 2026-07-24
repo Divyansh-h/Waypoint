@@ -1,6 +1,6 @@
 import torch
+from peft import LoraConfig, get_peft_model
 from sentence_transformers import SentenceTransformer
-from peft import get_peft_model, LoraConfig
 
 print("Generating valid LoRA weights for unit test...")
 model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")

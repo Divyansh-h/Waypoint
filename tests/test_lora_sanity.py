@@ -1,8 +1,10 @@
-import unittest
-import torch
-from sentence_transformers import SentenceTransformer
-from peft import PeftModel
 import os
+import unittest
+
+import torch
+from peft import PeftModel
+from sentence_transformers import SentenceTransformer
+
 
 class TestLoRACheckpoint(unittest.TestCase):
     def setUp(self):

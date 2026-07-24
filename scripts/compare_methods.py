@@ -16,7 +16,13 @@ sys.path.insert(0, str(root_dir))
 
 from eval.loader import load_eval_set
 from eval.metrics import cluster_failures
-from scripts.run_eval import load_db_config, get_db_connection, retrieve_chunks, evaluate_example, RETRIEVAL_METHODS
+from scripts.run_eval import (
+    RETRIEVAL_METHODS,
+    evaluate_example,
+    get_db_connection,
+    load_db_config,
+    retrieve_chunks,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("compare_methods")

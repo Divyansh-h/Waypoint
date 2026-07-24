@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import argparse
+import random
 import sys
 import time
-import random
 from collections import Counter
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 import yaml
 from tqdm import tqdm
@@ -14,13 +14,13 @@ from tqdm import tqdm
 src_path = Path(__file__).parent.parent / "src"
 sys.path.append(str(src_path.resolve()))
 
-from utils.logger import setup_logger
-from ingestion.crawler import RepoCrawler
 from ingestion.chunker import ASTChunker
+from ingestion.crawler import RepoCrawler
 from ingestion.doc_chunker import DocChunker
 from ingestion.embed import embed_chunks
 from ingestion.indexer import PgVectorIndexer
 from ingestion.models import Chunk
+from utils.logger import setup_logger
 
 
 def parse_args():

@@ -1,6 +1,9 @@
-import pytest
 from pathlib import Path
+
+import pytest
+
 from ingestion.chunker import ASTChunker
+
 
 @pytest.fixture
 def chunker() -> ASTChunker:

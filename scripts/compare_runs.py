@@ -2,8 +2,10 @@ import argparse
 import json
 import sys
 from pathlib import Path
+
 from rich.console import Console
 from rich.table import Table
+
 
 def load_run(path: Path):
     if not path.exists():
@@ -41,7 +43,7 @@ def main():
         console.print("[bold red]No common methods found between the two runs.[/bold red]")
         sys.exit(1)
 
-    console.print(f"[bold]Comparing Runs:[/bold]")
+    console.print("[bold]Comparing Runs:[/bold]")
     console.print(f"Run 1 (Baseline):   {args.run1}")
     console.print(f"Run 2 (Experiment): {args.run2}\n")
 

@@ -8,10 +8,11 @@ src_dir = Path(__file__).parent.parent / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
-from agent.orchestrator import AgentOrchestrator
 from rich.console import Console
-from rich.panel import Panel
 from rich.markdown import Markdown
+from rich.panel import Panel
+
+from agent.orchestrator import AgentOrchestrator
 
 # Configure standard logging to output the Orchestrator's internal step-by-step trace
 logging.basicConfig(
@@ -51,7 +52,7 @@ def main():
     except KeyboardInterrupt:
         console.print("\n[bold red]Execution interrupted by user.[/bold red]")
         sys.exit(1)
-    except Exception as e:
+    except Exception:
         logger.exception("A fatal error occurred during Agent execution.")
         sys.exit(1)
 

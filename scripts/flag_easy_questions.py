@@ -11,8 +11,9 @@ sys.path.insert(0, str(root_dir / "src"))
 sys.path.insert(0, str(root_dir))
 
 from eval.loader import load_eval_set
-from scripts.run_eval import load_db_config, get_db_connection
 from ingestion.embed import get_jina_embeddings
+from scripts.run_eval import get_db_connection, load_db_config
+
 
 def main():
     parser = argparse.ArgumentParser(description="Flag overly easy evaluation questions.")

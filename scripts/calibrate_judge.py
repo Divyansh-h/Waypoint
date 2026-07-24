@@ -1,8 +1,8 @@
+import argparse
 import json
 import logging
-import sys
 import random
-import argparse
+import sys
 from pathlib import Path
 
 # Ensure src/ is in the python path
@@ -10,9 +10,10 @@ src_dir = Path(__file__).parent.parent / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
-from eval.judge import score_answer, JudgeScore
 from rich.console import Console
 from rich.prompt import IntPrompt
+
+from eval.judge import score_answer
 
 try:
     from sklearn.metrics import cohen_kappa_score

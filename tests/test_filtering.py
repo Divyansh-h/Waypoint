@@ -1,6 +1,6 @@
-import pytest
-from training.schema import TrainingPair, PositiveChunk
 from training.filtering.quality import filter_training_pairs
+from training.schema import PositiveChunk, TrainingPair
+
 
 def make_pair(
     anchor: str, 

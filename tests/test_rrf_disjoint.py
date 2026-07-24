@@ -7,6 +7,7 @@ if str(src_dir) not in sys.path:
 
 from retrieval.fusion import reciprocal_rank_fusion
 
+
 def test_rrf_disjoint_lists():
     dense_results = [
         {"id": "c1", "content": "Chunk 1 - Dense Only (Rank 1)"},

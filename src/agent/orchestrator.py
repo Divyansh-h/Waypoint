@@ -1,7 +1,6 @@
 # ruff: noqa: E501
 import concurrent.futures
 import json
-import logging
 import os
 import time
 from typing import Any, Optional

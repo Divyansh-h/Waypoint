@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+
 import pytest
 
 # Ensure we can import from scripts and src
@@ -7,9 +8,10 @@ root_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(root_dir))
 sys.path.insert(0, str(root_dir / "src"))
 
-from scripts.run_eval import evaluate_example
 from eval.metrics import cluster_failures
 from ingestion.models import EvalExample
+from scripts.run_eval import evaluate_example
+
 
 def create_mock_example(ground_truth_chunk_ids: list[str]) -> EvalExample:
     """Helper to quickly scaffold a valid EvalExample."""

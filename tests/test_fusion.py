@@ -1,5 +1,7 @@
 import pytest
+
 from retrieval.fusion import reciprocal_rank_fusion
+
 
 def test_rrf_math_correctness():
     """

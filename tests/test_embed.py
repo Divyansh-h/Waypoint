@@ -1,7 +1,10 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from ingestion.embed import embed_chunks
 from ingestion.models import Chunk
+
 
 @pytest.fixture
 def sample_chunk_objects():

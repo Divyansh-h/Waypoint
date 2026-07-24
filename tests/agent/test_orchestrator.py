@@ -1,9 +1,8 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from agent.orchestrator import AgentOrchestrator
-from agent.state import AgentState
 from tests.conftest import MockLLMClient, MockResponse
+
 
 class MockFunctionCall:
     def __init__(self, name: str, args: dict):
@@ -75,7 +74,6 @@ def test_orchestrator_tool_exception_mid_run(mock_llm: MockLLMClient):
 
 def test_orchestrator_timeout_wall_clock(mock_llm: MockLLMClient):
     """Test that the wall-clock timeout successfully interrupts a hanging loop."""
-    import time
     
     orchestrator = AgentOrchestrator(llm_client=mock_llm)
     

@@ -1,4 +1,6 @@
-import glob, json
+import glob
+import json
+
 for f in glob.glob("results/**/*.json", recursive=True):
     with open(f, 'r') as file:
         try:

@@ -1,8 +1,8 @@
 import json
 import uuid
+
 import psycopg2
 import yaml
-from pathlib import Path
 
 # Load config
 with open("configs/ingestion.yaml", "r") as f:
@@ -69,4 +69,4 @@ with open("data/eval/eval_set.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(ex) + "\n")
 
 print(f"✅ Successfully appended {len(examples)} synthetic questions.")
-print(f"There should now be 100 questions in data/eval/eval_set.jsonl")
+print("There should now be 100 questions in data/eval/eval_set.jsonl")

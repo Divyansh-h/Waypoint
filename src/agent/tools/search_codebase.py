@@ -3,9 +3,9 @@ import logging
 from typing import Any, Dict
 
 import psycopg2
-from psycopg2 import sql
 import yaml
 from pgvector.psycopg2 import register_vector
+from psycopg2 import sql
 
 from agent.tools.base import BaseTool
 from retrieval.pipeline import RetrievalPipeline

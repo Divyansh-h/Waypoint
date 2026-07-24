@@ -8,9 +8,8 @@ from pathlib import Path
 from typing import List
 
 import psycopg2
-from pgvector.psycopg2 import register_vector
 import yaml
-
+from pgvector.psycopg2 import register_vector
 from rich.console import Console
 from rich.table import Table
 
@@ -19,13 +18,14 @@ src_dir = Path(__file__).parent.parent / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
-from eval.loader import load_eval_set
-from ingestion.models import EvalExample
-from eval.judge import score_answer, JudgeScore
-from ingestion.embed import get_jina_embeddings
 import os
+
 import google.generativeai as genai
 from dotenv import load_dotenv
+
+from eval.judge import JudgeScore, score_answer
+from eval.loader import load_eval_set
+from ingestion.models import EvalExample
 
 # Load environment variables from .env
 load_dotenv()

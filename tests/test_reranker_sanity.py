@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+
 import yaml
 
 # Ensure src/ is in the python path
@@ -8,6 +9,7 @@ if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
 from retrieval.reranker import get_reranker
+
 
 def test_reranker_order():
     print("Initializing Reranker...")

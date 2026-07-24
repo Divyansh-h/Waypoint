@@ -1,6 +1,8 @@
-import pytest
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
+import pytest
+
 
 @pytest.fixture
 def fake_repo(tmp_path: Path) -> Path:

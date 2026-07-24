@@ -2,17 +2,18 @@ import argparse
 import json
 import logging
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # Ensure src/ is in the python path
 src_dir = Path(__file__).parent.parent / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
-from eval.loader import load_eval_set
-from agent.orchestrator import AgentOrchestrator
 from dotenv import load_dotenv
+
+from agent.orchestrator import AgentOrchestrator
+from eval.loader import load_eval_set
 
 load_dotenv()
 
@@ -85,7 +86,7 @@ def main():
     recall = (total_hits / len(examples)) * 100
     
     logger.info("\n====================================")
-    logger.info(f"✅ Agent Eval Stub Complete")
+    logger.info("✅ Agent Eval Stub Complete")
     logger.info(f"📊 Simulated 1-Step Recall: {recall:.2f}%")
     logger.info("====================================\n")
     

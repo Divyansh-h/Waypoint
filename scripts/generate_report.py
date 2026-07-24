@@ -1,7 +1,7 @@
 import argparse
 import json
-import sys
 from pathlib import Path
+
 
 def generate_markdown(json_path: Path, output_path: Path):
     with open(json_path, 'r') as f:
@@ -20,7 +20,7 @@ def generate_markdown(json_path: Path, output_path: Path):
         data["raw_results_per_method"] = {method: data.get("results", [])}
 
     md = [
-        f"# RAG Evaluation Report",
+        "# RAG Evaluation Report",
         f"**Run Timestamp:** {data.get('timestamp')}",
         f"**Evaluation File:** {data.get('eval_file')}",
         "\n## 1. Metrics Comparison\n",

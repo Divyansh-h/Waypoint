@@ -1,17 +1,16 @@
-import argparse
 import ast
 import json
 import logging
 import os
+import random
 import sys
 import time
-import random
-from typing import List, Dict, Tuple
-from dotenv import load_dotenv
+from typing import List, Tuple
 
+import google.generativeai as genai
 import psycopg2
 import psycopg2.extras
-import google.generativeai as genai
+from dotenv import load_dotenv
 
 # Ensure src/ is in the python path
 src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../src'))

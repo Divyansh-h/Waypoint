@@ -1,6 +1,7 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from agent.tools.search_codebase import SearchCodebaseTool
+
 
 def test_search_codebase_execute():
     # Mocking both psycopg2.connect and the RetrievalPipeline

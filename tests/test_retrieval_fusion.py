@@ -1,12 +1,12 @@
 import sys
 from pathlib import Path
-import pytest
 
 # Ensure src/ is in the python path
 root_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(root_dir / "src"))
 
-from retrieval.fusion import reciprocal_rank_fusion, weighted_score_fusion
+from retrieval.fusion import reciprocal_rank_fusion
+
 
 def test_reciprocal_rank_fusion_consensus():
     """

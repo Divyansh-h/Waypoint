@@ -1,5 +1,6 @@
 from training.mining.docstring_pairs import mine_docstring_pairs
 
+
 def test_mine_docstring_pairs(sample_chunks):
     pairs = mine_docstring_pairs(sample_chunks)
     

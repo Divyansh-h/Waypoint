@@ -1,6 +1,7 @@
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 
 # Create the assets directory for the GitHub README
 output_dir = "/Users/divyansh/code/Waypoint/assets/images"

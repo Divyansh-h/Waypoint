@@ -1,10 +1,11 @@
 # ruff: noqa: E501
 import ast
 import logging
-import psycopg2
-from psycopg2 import sql
-import yaml
 from typing import Any, Dict
+
+import psycopg2
+import yaml
+from psycopg2 import sql
 
 from agent.tools.base import BaseTool
 

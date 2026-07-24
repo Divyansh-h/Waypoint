@@ -2,12 +2,10 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-import torch
-from sentence_transformers import SentenceTransformer
-from sentence_transformers.util import semantic_search
+
 from rich.console import Console
 from rich.table import Table
-from peft import PeftModel
+from sentence_transformers import SentenceTransformer
 
 # Ensure src/ is in the python path
 src_dir = Path(__file__).parent.parent / "src"

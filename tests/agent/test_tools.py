@@ -1,10 +1,10 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from agent.tools.sandbox import CodeSandboxTool
+import pytest
+
 from agent.tools.ast_search import ASTSearchTool
 from agent.tools.git_patch import GitPatchTool
-
+from agent.tools.sandbox import CodeSandboxTool
 
 # --- FIXTURES ---
 

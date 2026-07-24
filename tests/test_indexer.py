@@ -1,7 +1,8 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from ingestion.indexer import PgVectorIndexer
 from ingestion.models import EmbeddedChunk
+
 
 @patch("ingestion.indexer.psycopg2.connect")
 def test_indexer_upsert(mock_connect):

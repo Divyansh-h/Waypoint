@@ -1,5 +1,6 @@
-import glob, json
-from datetime import datetime
+import glob
+import json
+
 runs = []
 for f in glob.glob("results/**/eval_run_*.json", recursive=True):
     with open(f, 'r') as file:

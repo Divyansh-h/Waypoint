@@ -1,6 +1,7 @@
 import argparse
-import logging
 import json
+import logging
+
 import torch
 from sentence_transformers import SentenceTransformer, losses
 from sentence_transformers.readers import InputExample
